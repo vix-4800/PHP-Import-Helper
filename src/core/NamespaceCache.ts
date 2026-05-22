@@ -47,7 +47,8 @@ export class NamespaceCache {
             const parsed = this.parser.parse(document.getText());
 
             for (const className of parsed.declaredClassNames) {
-                const fqcn = parsed.namespace === null ? className : `${parsed.namespace}\\${className}`;
+                const fqcn =
+                    parsed.namespace === null ? className : `${parsed.namespace}\\${className}`;
                 this.add({ fqcn, className, uri });
             }
         }

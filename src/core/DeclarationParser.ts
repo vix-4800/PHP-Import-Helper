@@ -2,7 +2,8 @@ import { getInsertPosition } from './insertPosition';
 import type { DeclarationLines, ImportKind, ParseResult, UseStatement } from '../types';
 import { getLines } from './text';
 
-const classDeclarationPattern = /^\s*(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_][A-Za-z0-9_]*)\b/;
+const classDeclarationPattern =
+    /^\s*(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_][A-Za-z0-9_]*)\b/;
 
 function parseUseStatement(text: string, line: number, endLine = line): UseStatement[] {
     const normalized = text.replace(/\s+/g, ' ').trim();
@@ -18,7 +19,8 @@ function parseUseStatement(text: string, line: number, endLine = line): UseState
         const prefix = body.slice(0, body.indexOf('{')).replace(/\\+$/, '');
         const entries = body.slice(body.indexOf('{') + 1, body.lastIndexOf('}'));
 
-        return entries.split(',')
+        return entries
+            .split(',')
             .map((entry) => entry.trim())
             .filter((entry) => entry !== '')
             .map((entry) => parseSingleUse(`${prefix}\\${entry}`, kind, text, line, endLine))
@@ -28,7 +30,13 @@ function parseUseStatement(text: string, line: number, endLine = line): UseState
     return [parseSingleUse(body, kind, text, line, endLine)].filter(Boolean) as UseStatement[];
 }
 
-function parseSingleUse(body: string, kind: ImportKind, text: string, line: number, endLine: number): UseStatement | null {
+function parseSingleUse(
+    body: string,
+    kind: ImportKind,
+    text: string,
+    line: number,
+    endLine: number
+): UseStatement | null {
     const match = /^(.+?)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?$/i.exec(body.trim());
 
     if (!match) {
@@ -112,7 +120,12 @@ export class DeclarationParser {
             }
         }
 
-        if (ensureNotImported !== undefined && useStatements.some((statement) => statement.fqcn === ensureNotImported.replace(/^\\+/, ''))) {
+        if (
+            ensureNotImported !== undefined &&
+            useStatements.some(
+                (statement) => statement.fqcn === ensureNotImported.replace(/^\\+/, '')
+            )
+        ) {
             throw new Error(`${ensureNotImported} is already imported`);
         }
 
@@ -125,8 +138,8 @@ export class DeclarationParser {
     }
 
     public getImportedClassNames(text: string): string[] {
-        return this.parse(text).useStatements
-            .filter((statement) => statement.kind === 'class')
+        return this.parse(text)
+            .useStatements.filter((statement) => statement.kind === 'class')
             .map((statement) => statement.className);
     }
 

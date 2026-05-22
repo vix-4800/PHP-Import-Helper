@@ -59,7 +59,11 @@ function normalizePath(filePath: string): string {
     return filePath.replace(/\\/g, '/').replace(/\/+$/, '');
 }
 
-function resolveFromMappings(filePath: string, mappings: AutoloadMapping[], psr0: boolean): string | null {
+function resolveFromMappings(
+    filePath: string,
+    mappings: AutoloadMapping[],
+    psr0: boolean
+): string | null {
     const normalized = normalizePath(filePath);
 
     for (const mapping of mappings) {
@@ -74,9 +78,10 @@ function resolveFromMappings(filePath: string, mappings: AutoloadMapping[], psr0
             const remaining = normalized.slice(index + base.length).replace(/^\/+/, '');
             const suffix = remaining === '' ? '' : `\\${remaining.replace(/\//g, '\\')}`;
             const remainingNamespace = remaining.replace(/\//g, '\\');
-            const namespace = psr0 && remainingNamespace.startsWith(`${mapping.namespace}\\`)
-                ? remainingNamespace
-                : `${mapping.namespace}${suffix}`;
+            const namespace =
+                psr0 && remainingNamespace.startsWith(`${mapping.namespace}\\`)
+                    ? remainingNamespace
+                    : `${mapping.namespace}${suffix}`;
 
             return namespace.replace(/\\+$/, '');
         }
@@ -86,6 +91,8 @@ function resolveFromMappings(filePath: string, mappings: AutoloadMapping[], psr0
 }
 
 export function resolveNamespace(filePath: string, autoload: AutoloadConfig): string | null {
-    return resolveFromMappings(filePath, autoload.psr4, false)
-        ?? resolveFromMappings(filePath, autoload.psr0, true);
+    return (
+        resolveFromMappings(filePath, autoload.psr4, false) ??
+        resolveFromMappings(filePath, autoload.psr0, true)
+    );
 }

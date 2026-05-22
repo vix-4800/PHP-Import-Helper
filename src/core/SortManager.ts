@@ -29,7 +29,10 @@ function naturalCompare(a: string, b: string): number {
 function compareUseStatements(mode: SortMode): (left: UseStatement, right: UseStatement) => number {
     return (left, right) => {
         if (left.kind !== right.kind) {
-            return ['class', 'function', 'const'].indexOf(left.kind) - ['class', 'function', 'const'].indexOf(right.kind);
+            return (
+                ['class', 'function', 'const'].indexOf(left.kind) -
+                ['class', 'function', 'const'].indexOf(right.kind)
+            );
         }
 
         if (mode === 'length' && left.fqcn.length !== right.fqcn.length) {
@@ -57,7 +60,11 @@ export class SortManager {
     public sortText(text: string, mode: SortMode): string {
         const parsed = this.parser.parse(text);
 
-        if (parsed.useStatements.length < 2 || parsed.declarationLines.firstUseStatement === null || parsed.declarationLines.lastUseStatement === null) {
+        if (
+            parsed.useStatements.length < 2 ||
+            parsed.declarationLines.firstUseStatement === null ||
+            parsed.declarationLines.lastUseStatement === null
+        ) {
             throw new Error('Nothing to sort');
         }
 
@@ -68,7 +75,11 @@ export class SortManager {
             const lastGroup = groups[groups.length - 1];
             const rendered = renderUse(statement);
 
-            if (lastGroup === undefined || sorted[sorted.findIndex((item) => renderUse(item) === lastGroup[0])]?.kind !== statement.kind) {
+            if (
+                lastGroup === undefined ||
+                sorted[sorted.findIndex((item) => renderUse(item) === lastGroup[0])]?.kind !==
+                    statement.kind
+            ) {
                 groups.push([rendered]);
             } else {
                 lastGroup.push(rendered);
@@ -79,8 +90,10 @@ export class SortManager {
         const lines = text.split(/\r?\n/);
         lines.splice(
             parsed.declarationLines.firstUseStatement - 1,
-            parsed.declarationLines.lastUseStatement - parsed.declarationLines.firstUseStatement + 1,
-            newBlock,
+            parsed.declarationLines.lastUseStatement -
+                parsed.declarationLines.firstUseStatement +
+                1,
+            newBlock
         );
 
         return lines.join('\n');

@@ -34,7 +34,9 @@ export class ImportManager {
     public replaceImportedFullyQualifiedClasses(text: string): string {
         let result = text;
 
-        for (const statement of this.parser.parse(text).useStatements.filter((item) => item.kind === 'class')) {
+        for (const statement of this.parser
+            .parse(text)
+            .useStatements.filter((item) => item.kind === 'class')) {
             const className = statement.className;
             const fqcn = statement.fqcn;
             const pattern = new RegExp(`\\\\${escapeRegex(fqcn)}\\b`, 'g');
@@ -70,7 +72,12 @@ export class ImportManager {
             }
             handledRanges.add(rangeKey);
 
-            const siblings = parsed.useStatements.filter((item) => item.line === statement.line && item.endLine === statement.endLine && item.kind === 'class');
+            const siblings = parsed.useStatements.filter(
+                (item) =>
+                    item.line === statement.line &&
+                    item.endLine === statement.endLine &&
+                    item.kind === 'class'
+            );
             const kept = siblings.filter((item) => this.isUsed(text, detected, item));
 
             if (kept.length === siblings.length) {
@@ -105,8 +112,10 @@ export class ImportManager {
     }
 
     private isUsed(text: string, detected: Set<string>, statement: UseStatement): boolean {
-        return detected.has(statement.className)
-            || new RegExp(`\\b${escapeRegex(statement.className)}\\\\[A-Za-z_]`).test(text);
+        return (
+            detected.has(statement.className) ||
+            new RegExp(`\\b${escapeRegex(statement.className)}\\\\[A-Za-z_]`).test(text)
+        );
     }
 
     private renderUse(statement: UseStatement): string {

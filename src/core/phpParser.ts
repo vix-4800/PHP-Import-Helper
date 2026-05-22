@@ -5,7 +5,9 @@ export class PhpAstParser {
 
     public constructor() {
         const Parser = require('php-parser') as {
-            Engine: new (options: unknown) => { parseCode: (code: string, filename?: string) => unknown };
+            Engine: new (options: unknown) => {
+                parseCode: (code: string, filename?: string) => unknown;
+            };
         };
 
         this.engine = new Parser.Engine({

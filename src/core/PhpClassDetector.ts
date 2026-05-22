@@ -39,7 +39,7 @@ export function sanitizePhpCode(text: string, options: { preservePhpDoc?: boolea
         const current = text[index];
         const next = text[index + 1];
 
-        if (current === '\'' || current === '"') {
+        if (current === "'" || current === '"') {
             const quote = current;
             const start = index;
             index++;
@@ -102,9 +102,10 @@ export function sanitizePhpCode(text: string, options: { preservePhpDoc?: boolea
             const endPattern = new RegExp(`\\n[ \\t]*${marker};?`);
             const remaining = text.slice(index + heredoc[0].length);
             const endMatch = remaining.match(endPattern);
-            index = endMatch?.index === undefined
-                ? text.length
-                : index + heredoc[0].length + endMatch.index + endMatch[0].length;
+            index =
+                endMatch?.index === undefined
+                    ? text.length
+                    : index + heredoc[0].length + endMatch.index + endMatch[0].length;
             blankRange(chars, start, index);
             continue;
         }
@@ -116,10 +117,12 @@ export function sanitizePhpCode(text: string, options: { preservePhpDoc?: boolea
 }
 
 function extractTypeNames(typeExpression: string): string[] {
-    return unique([...typeExpression.matchAll(/\\?([A-Za-z_][A-Za-z0-9_]*)(?:\\[A-Za-z_][A-Za-z0-9_]*)*/g)]
-        .map((match) => match[0].replace(/^\\+/, '').split('\\').pop() ?? '')
-        .filter((name) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
-        .filter((name) => !scalarTypes.has(name.toLowerCase())));
+    return unique(
+        [...typeExpression.matchAll(/\\?([A-Za-z_][A-Za-z0-9_]*)(?:\\[A-Za-z_][A-Za-z0-9_]*)*/g)]
+            .map((match) => match[0].replace(/^\\+/, '').split('\\').pop() ?? '')
+            .filter((name) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
+            .filter((name) => !scalarTypes.has(name.toLowerCase()))
+    );
 }
 
 export class PhpClassDetector {
@@ -142,7 +145,12 @@ export class PhpClassDetector {
                 const baseOffset = (match.index ?? 0) + match[0].indexOf(value);
 
                 for (const name of names) {
-                    if (builtInClasses.has(name) && !/JsonSerializable|Stringable|Countable|Iterator|RuntimeException|DomainException/.test(name)) {
+                    if (
+                        builtInClasses.has(name) &&
+                        !/JsonSerializable|Stringable|Countable|Iterator|RuntimeException|DomainException/.test(
+                            name
+                        )
+                    ) {
                         continue;
                     }
 
@@ -153,13 +161,25 @@ export class PhpClassDetector {
             }
         };
 
-        addMatches(sanitized, /\b(?:class|interface)\s+[A-Za-z_][A-Za-z0-9_]*\s+extends\s+([^{]+)/g);
-        addMatches(sanitized, /\b(?:class|enum)\s+[A-Za-z_][A-Za-z0-9_]*(?::\s*\w+)?\s+implements\s+([^{]+)/g);
+        addMatches(
+            sanitized,
+            /\b(?:class|interface)\s+[A-Za-z_][A-Za-z0-9_]*\s+extends\s+([^{]+)/g
+        );
+        addMatches(
+            sanitized,
+            /\b(?:class|enum)\s+[A-Za-z_][A-Za-z0-9_]*(?::\s*\w+)?\s+implements\s+([^{]+)/g
+        );
         addMatches(sanitized, /\bfunction\s*(?:[A-Za-z_][A-Za-z0-9_]*)?\s*\(([^)]*)\)/g);
         addMatches(sanitized, /\bfn\s*\(([^)]*)\)/g);
         addMatches(sanitized, /\)\s*:\s*([^{;=]+)/g);
-        addMatches(sanitized, /\b(?:public|protected|private)(?:\s+(?:static|readonly|private\(set\)|protected\(set\)))*\s+([^$;=]+)\s+\$[A-Za-z_]/g);
-        addMatches(sanitized, /\b(?:public|protected|private)?\s*const\s+([A-Za-z_][A-Za-z0-9_|\\&()?\s]*)\s+[A-Z_]/g);
+        addMatches(
+            sanitized,
+            /\b(?:public|protected|private)(?:\s+(?:static|readonly|private\(set\)|protected\(set\)))*\s+([^$;=]+)\s+\$[A-Za-z_]/g
+        );
+        addMatches(
+            sanitized,
+            /\b(?:public|protected|private)?\s*const\s+([A-Za-z_][A-Za-z0-9_|\\&()?\s]*)\s+[A-Z_]/g
+        );
         addMatches(sanitized, /\bnew\s+(?!class\b)(\\?[A-Za-z_][A-Za-z0-9_\\]*)/g);
         addMatches(sanitized, /(?<![$\\])\b([A-Za-z_][A-Za-z0-9_\\]*)::/g);
         addMatches(sanitized, /\binstanceof\s+(\\?[A-Za-z_][A-Za-z0-9_\\]*)/g);
@@ -171,12 +191,13 @@ export class PhpClassDetector {
             const phpDoc = block[0];
             const offset = block.index ?? 0;
 
-            for (const lineMatch of phpDoc.matchAll(/^\s*\*\s*@(param|return|var|throws|property(?:-read|-write)?|mixin|extends|implements|method|see|template)\s+(.+)$/gm)) {
+            for (const lineMatch of phpDoc.matchAll(
+                /^\s*\*\s*@(param|return|var|throws|property(?:-read|-write)?|mixin|extends|implements|method|see|template)\s+(.+)$/gm
+            )) {
                 const tag = lineMatch[1];
                 const body = lineMatch[2];
-                const expression = tag === 'template'
-                    ? body.replace(/^[A-Za-z_][A-Za-z0-9_]*\s+of\s+/, '')
-                    : body;
+                const expression =
+                    tag === 'template' ? body.replace(/^[A-Za-z_][A-Za-z0-9_]*\s+of\s+/, '') : body;
 
                 for (const name of extractTypeNames(expression)) {
                     if (/^T[A-Z]/.test(name) && !expression.includes(`of ${name}`)) {
