@@ -14,7 +14,7 @@ export async function run(): Promise<void> {
         mocha.addFile(path.resolve(testsRoot, file));
     }
 
-    return void await new Promise((resolve, reject) => {
+    return void await new Promise<void>((resolve, reject) => {
         mocha.run((failures) => {
             if (failures > 0) {
                 reject(new Error(`${failures} tests failed.`));
