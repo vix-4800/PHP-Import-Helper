@@ -1,130 +1,80 @@
 import { getInsertPosition } from './insertPosition';
+import {
+    PhpAstParser,
+    type PhpAstNode,
+    type PhpAstUseGroup,
+    type PhpAstUseItem,
+} from './phpParser';
 import type { DeclarationLines, ImportKind, ParseResult, UseStatement } from '../types';
-import { getLines } from './text';
 
-const classDeclarationPattern =
-    /^\s*(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_][A-Za-z0-9_]*)\b/;
-
-function parseUseStatement(text: string, line: number, endLine = line): UseStatement[] {
-    const normalized = text.replace(/\s+/g, ' ').trim();
-    const match = /^use\s+(?:(function|const)\s+)?(.+);$/.exec(normalized);
-
-    if (!match) {
-        return [];
-    }
-
-    const kind = (match[1] ?? 'class') as ImportKind;
-    const body = match[2].trim();
-    if (body.includes('{') && body.includes('}')) {
-        const prefix = body.slice(0, body.indexOf('{')).replace(/\\+$/, '');
-        const entries = body.slice(body.indexOf('{') + 1, body.lastIndexOf('}'));
-
-        return entries
-            .split(',')
-            .map((entry) => entry.trim())
-            .filter((entry) => entry !== '')
-            .map((entry) => parseSingleUse(`${prefix}\\${entry}`, kind, text, line, endLine))
-            .filter(Boolean) as UseStatement[];
-    }
-
-    return [parseSingleUse(body, kind, text, line, endLine)].filter(Boolean) as UseStatement[];
+function isClassLike(node: PhpAstNode): boolean {
+    return ['class', 'interface', 'trait', 'enum'].includes(node.kind);
 }
 
-function parseSingleUse(
-    body: string,
-    kind: ImportKind,
-    text: string,
-    line: number,
-    endLine: number
-): UseStatement | null {
-    const match = /^(.+?)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?$/i.exec(body.trim());
+function normalizeImportKind(kind: ImportKind | null): ImportKind {
+    return kind ?? 'class';
+}
 
-    if (!match) {
-        return null;
-    }
-
-    const fqcn = match[1].replace(/^\\+|\\+$/g, '');
-    const alias = match[2] ?? null;
-    const shortName = fqcn.split('\\').pop() ?? fqcn;
-
-    return {
-        text,
-        line,
-        endLine,
-        fqcn,
-        alias,
-        className: alias ?? shortName,
-        kind,
-    };
+function shortName(fqcn: string): string {
+    return fqcn.split('\\').pop() ?? fqcn;
 }
 
 export class DeclarationParser {
+    public constructor(private readonly phpParser = new PhpAstParser()) {}
+
     public parse(text: string, ensureNotImported?: string): ParseResult {
-        const lines = getLines(text);
+        const document = this.phpParser.parse(text);
+        const namespaceNode = this.phpParser.getNamespace(document);
+        const topLevelStatements = this.phpParser.getTopLevelStatements(document);
         const declarationLines: DeclarationLines = {
-            phpTag: 0,
+            phpTag: text.includes('<?php') ? 1 : 0,
             declare: null,
-            namespace: null,
+            namespace: namespaceNode?.loc?.start.line ?? null,
             firstUseStatement: null,
             lastUseStatement: null,
             classDeclaration: null,
         };
         const useStatements: UseStatement[] = [];
         const declaredClassNames: string[] = [];
-        let namespace: string | null = null;
+        const namespace = namespaceNode?.name ?? null;
+        let beforeDeclaration = true;
 
-        for (let index = 0; index < lines.length; index++) {
-            const line = lines[index];
-            const oneBased = index + 1;
-
-            if (declarationLines.phpTag === 0 && /^\s*<\?php\b/.test(line)) {
-                declarationLines.phpTag = oneBased;
-            }
-
-            if (declarationLines.declare === null && /^\s*declare\s*\(/.test(line)) {
-                declarationLines.declare = oneBased;
-            }
-
-            const namespaceMatch = /^\s*(?:<\?php\s+)?namespace\s+([^;]+);/.exec(line);
-
-            if (namespaceMatch && declarationLines.namespace === null) {
-                namespace = namespaceMatch[1].trim();
-                declarationLines.namespace = oneBased;
-            }
-
-            const classMatch = classDeclarationPattern.exec(line);
-
-            if (classMatch) {
-                declarationLines.classDeclaration = oneBased;
-                declaredClassNames.push(classMatch[1]);
-                break;
-            }
-
-            if (/^\s*use\s+/.test(line)) {
-                let block = line;
-                let endIndex = index;
-
-                while (!block.includes(';') && endIndex + 1 < lines.length) {
-                    endIndex++;
-                    block += `\n${lines[endIndex]}`;
-                }
-
-                const parsed = parseUseStatement(block, oneBased, endIndex + 1);
-
-                if (parsed.length > 0) {
-                    declarationLines.firstUseStatement ??= oneBased;
-                    declarationLines.lastUseStatement = endIndex + 1;
-                    useStatements.push(...parsed);
-                    index = endIndex;
-                }
+        for (const statement of document.program.children) {
+            if (statement.kind === 'declare') {
+                declarationLines.declare ??= statement.loc?.start.line ?? null;
             }
         }
 
+        for (const statement of topLevelStatements) {
+            if (isClassLike(statement)) {
+                const name = this.readDeclaredClassName(statement);
+                if (name !== null) {
+                    declaredClassNames.push(name);
+                }
+
+                declarationLines.classDeclaration ??= statement.loc?.start.line ?? null;
+                beforeDeclaration = false;
+                continue;
+            }
+
+            if (!beforeDeclaration || !this.phpParser.isUseGroup(statement)) {
+                continue;
+            }
+
+            const parsed = this.parseUseGroup(document.text, statement);
+            if (parsed.length === 0) {
+                continue;
+            }
+
+            declarationLines.firstUseStatement ??= statement.loc?.start.line ?? null;
+            declarationLines.lastUseStatement = statement.loc?.end.line ?? null;
+            useStatements.push(...parsed);
+        }
+
+        const normalizedEnsureNotImported = ensureNotImported?.replace(/^\\+/, '');
         if (
-            ensureNotImported !== undefined &&
-            useStatements.some(
-                (statement) => statement.fqcn === ensureNotImported.replace(/^\\+/, '')
-            )
+            normalizedEnsureNotImported !== undefined &&
+            useStatements.some((statement) => statement.fqcn === normalizedEnsureNotImported)
         ) {
             throw new Error(`${ensureNotImported} is already imported`);
         }
@@ -156,5 +106,64 @@ export class DeclarationParser {
 
     public getInsertPosition(declarationLines: DeclarationLines) {
         return getInsertPosition(declarationLines);
+    }
+
+    private parseUseGroup(text: string, statement: PhpAstUseGroup): UseStatement[] {
+        const line = statement.loc?.start.line;
+        const endLine = statement.loc?.end.line;
+
+        if (line === undefined || endLine === undefined) {
+            return [];
+        }
+
+        const groupText = statement.loc === undefined ? '' : text.slice(statement.loc.start.offset, statement.loc.end.offset);
+
+        return statement.items
+            .map((item) => this.parseUseItem(groupText, statement, item, line, endLine))
+            .filter((item): item is UseStatement => item !== null);
+    }
+
+    private parseUseItem(
+        text: string,
+        group: PhpAstUseGroup,
+        item: PhpAstUseItem,
+        line: number,
+        endLine: number
+    ): UseStatement | null {
+        const prefix = group.name === null ? '' : `${group.name.replace(/\\+$/, '')}\\`;
+        const fqcn = `${prefix}${item.name}`.replace(/^\\+|\\+$/g, '');
+
+        if (fqcn === '') {
+            return null;
+        }
+
+        const alias = item.alias?.name ?? null;
+        const kind = normalizeImportKind(item.type ?? group.type);
+
+        return {
+            text,
+            line,
+            endLine,
+            fqcn,
+            alias,
+            className: alias ?? shortName(fqcn),
+            kind,
+        };
+    }
+
+    private readDeclaredClassName(node: PhpAstNode): string | null {
+        const name = node.name;
+
+        if (
+            typeof name === 'object' &&
+            name !== null &&
+            'name' in name &&
+            typeof (name as { name: unknown }).name === 'string' &&
+            (name as { name: string }).name !== ''
+        ) {
+            return (name as { name: string }).name;
+        }
+
+        return null;
     }
 }

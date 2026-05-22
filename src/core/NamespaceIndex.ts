@@ -1,4 +1,5 @@
 import type { CacheEntry, ResolvedNamespace } from '../types';
+import { PhpAstParser } from './phpParser';
 
 type IndexedEntry = Omit<CacheEntry, 'uri'> & {
     uri: { fsPath: string };
@@ -6,14 +7,25 @@ type IndexedEntry = Omit<CacheEntry, 'uri'> & {
 
 export class NamespaceIndex {
     private readonly entries = new Map<string, IndexedEntry[]>();
+    private static readonly parser = new PhpAstParser();
 
     public static entriesFromPhpFile(uri: { fsPath: string }, text: string): IndexedEntry[] {
-        const namespace = /^\s*namespace\s+([^;]+);/m.exec(text)?.[1].trim() ?? null;
-        const declarations = [
-            ...text.matchAll(
-                /^\s*(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_][A-Za-z0-9_]*)\b/gm
-            ),
-        ].map((match) => match[1]);
+        const document = this.parser.parse(text, uri.fsPath);
+        const namespace = this.parser.getNamespace(document)?.name ?? null;
+        const declarations = this.parser
+            .getTopLevelStatements(document)
+            .filter((node) => ['class', 'interface', 'trait', 'enum'].includes(node.kind))
+            .map((node) => {
+                const name = node.name;
+
+                return typeof name === 'object' &&
+                    name !== null &&
+                    'name' in name &&
+                    typeof (name as { name: unknown }).name === 'string'
+                    ? (name as { name: string }).name
+                    : '';
+            })
+            .filter((name) => name !== '');
 
         return declarations.map((className) => ({
             className,

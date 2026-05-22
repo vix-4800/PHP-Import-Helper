@@ -32,6 +32,7 @@ export class DiagnosticManager implements vscode.Disposable {
         const declared = new Set(parsed.declaredClassNames);
         const detected = this.detector.detectAllWithPositions(text);
         const detectedNames = new Set(detected.map((item) => item.name));
+        const importUsages = new Set(this.detector.detectImportUsages(text));
         const diagnostics: vscode.Diagnostic[] = [];
 
         if (config.get<boolean>('highlightNotImported', true)) {
@@ -72,11 +73,7 @@ export class DiagnosticManager implements vscode.Disposable {
                     continue;
                 }
 
-                const usedAsPrefix = new RegExp(`\\b${statement.className}\\\\[A-Za-z_]`).test(
-                    text
-                );
-
-                if (!detectedNames.has(statement.className) && !usedAsPrefix) {
+                if (!detectedNames.has(statement.className) && !importUsages.has(statement.className)) {
                     const range = new vscode.Range(
                         statement.line - 1,
                         0,
