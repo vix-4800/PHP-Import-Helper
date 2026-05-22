@@ -66,6 +66,24 @@ class Foo {
         assert.strictEqual(result.declarationLines.lastUseStatement, 6);
     });
 
+    test('parses bracketed namespaces and preserves top-level imports only', () => {
+        const result = parser.parse(`<?php
+
+namespace App\\Http {
+    use App\\Models\\User;
+
+    class Foo {
+        use HasFactory;
+    }
+}
+`);
+
+        assert.strictEqual(result.namespace, 'App\\Http');
+        assert.deepStrictEqual(result.useStatements.map((statement) => statement.className), ['User']);
+        assert.strictEqual(result.declarationLines.firstUseStatement, 4);
+        assert.strictEqual(result.declarationLines.classDeclaration, 6);
+    });
+
     test('returns alias for imported fully qualified class', () => {
         const result = parser.getImportedClassName(`<?php
 

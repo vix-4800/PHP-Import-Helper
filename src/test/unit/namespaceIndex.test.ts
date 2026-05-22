@@ -87,4 +87,22 @@ class Mockery {}
             },
         ]);
     });
+
+    test('creates entries for bracketed namespaces', () => {
+        const entries = NamespaceIndex.entriesFromPhpFile(
+            { fsPath: '/project/app/Domain/User.php' },
+            `<?php
+
+namespace App\\Domain {
+    final class User {}
+    interface UserRepository {}
+}
+`
+        );
+
+        assert.deepStrictEqual(entries.map((entry) => entry.fqcn), [
+            'App\\Domain\\User',
+            'App\\Domain\\UserRepository',
+        ]);
+    });
 });
