@@ -1,21 +1,210 @@
 {
   "name": "php-import-helper",
   "displayName": "PHP Import Helper",
-  "description": "",
+  "description": "Import, expand, sort, diagnose, and manage PHP namespaces",
   "version": "0.0.1",
+  "publisher": "vix",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.120.0"
   },
   "categories": [
-    "Other"
+    "Programming Languages",
+    "Formatters",
+    "Linters"
   ],
-  "activationEvents": [],
+  "keywords": [
+    "php",
+    "namespace",
+    "import",
+    "autoload",
+    "psr-4"
+  ],
+  "activationEvents": [
+    "onLanguage:php"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "PHP Import Helper",
+      "properties": {
+        "phpImportHelper.exclude": {
+          "type": "string",
+          "default": "**/node_modules/**",
+          "description": "Glob pattern to exclude while finding PHP files."
+        },
+        "phpImportHelper.autoSort": {
+          "type": "boolean",
+          "default": true,
+          "description": "Sort imports after adding a new import."
+        },
+        "phpImportHelper.autoFoldUses": {
+          "type": "boolean",
+          "default": false,
+          "description": "Fold import blocks when opening or switching PHP files."
+        },
+        "phpImportHelper.sortOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Sort imports on save."
+        },
+        "phpImportHelper.sortMode": {
+          "type": "string",
+          "enum": [
+            "natural",
+            "length",
+            "alphabetical"
+          ],
+          "default": "natural",
+          "description": "Import sort mode."
+        },
+        "phpImportHelper.leadingSeparator": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prepend a leading backslash when expanding class names."
+        },
+        "phpImportHelper.removeOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Remove unused imports on save."
+        },
+        "phpImportHelper.autoImportOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Import uniquely resolved classes on save."
+        },
+        "phpImportHelper.ignoreList": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Class names ignored by diagnostics."
+        },
+        "phpImportHelper.highlightNotImported": {
+          "type": "boolean",
+          "default": true,
+          "description": "Report unimported classes."
+        },
+        "phpImportHelper.highlightNotUsed": {
+          "type": "boolean",
+          "default": true,
+          "description": "Report unused imports."
+        }
+      }
+    },
     "commands": [
       {
-        "command": "php-import-helper.helloWorld",
-        "title": "Hello World"
+        "command": "phpImportHelper.import",
+        "title": "Import Class",
+        "category": "PHP Import Helper"
+      },
+      {
+        "command": "phpImportHelper.importAll",
+        "title": "Import All Classes",
+        "category": "PHP Import Helper"
+      },
+      {
+        "command": "phpImportHelper.expand",
+        "title": "Expand Class",
+        "category": "PHP Import Helper"
+      },
+      {
+        "command": "phpImportHelper.sort",
+        "title": "Sort Imports",
+        "category": "PHP Import Helper"
+      },
+      {
+        "command": "phpImportHelper.foldUses",
+        "title": "Fold Imports",
+        "category": "PHP Import Helper"
+      },
+      {
+        "command": "phpImportHelper.removeUnused",
+        "title": "Remove Unused Imports",
+        "category": "PHP Import Helper"
+      },
+      {
+        "command": "phpImportHelper.generateNamespace",
+        "title": "Generate Namespace",
+        "category": "PHP Import Helper"
+      },
+      {
+        "command": "phpImportHelper.rebuildIndex",
+        "title": "Rebuild Namespace Index",
+        "category": "PHP Import Helper"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "resourceLangId == php",
+          "command": "phpImportHelper.import",
+          "group": "0_php_import_helper@1"
+        },
+        {
+          "when": "resourceLangId == php",
+          "command": "phpImportHelper.importAll",
+          "group": "0_php_import_helper@2"
+        },
+        {
+          "when": "resourceLangId == php",
+          "command": "phpImportHelper.expand",
+          "group": "0_php_import_helper@3"
+        },
+        {
+          "when": "resourceLangId == php",
+          "command": "phpImportHelper.sort",
+          "group": "0_php_import_helper@4"
+        },
+        {
+          "when": "resourceLangId == php",
+          "command": "phpImportHelper.foldUses",
+          "group": "0_php_import_helper@5"
+        },
+        {
+          "when": "resourceLangId == php",
+          "command": "phpImportHelper.removeUnused",
+          "group": "0_php_import_helper@6"
+        },
+        {
+          "when": "resourceLangId == php",
+          "command": "phpImportHelper.generateNamespace",
+          "group": "0_php_import_helper@7"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "phpImportHelper.import",
+        "key": "ctrl+alt+i",
+        "when": "editorTextFocus && editorLangId == php"
+      },
+      {
+        "command": "phpImportHelper.importAll",
+        "key": "ctrl+alt+a",
+        "when": "editorTextFocus && editorLangId == php"
+      },
+      {
+        "command": "phpImportHelper.expand",
+        "key": "ctrl+alt+e",
+        "when": "editorTextFocus && editorLangId == php"
+      },
+      {
+        "command": "phpImportHelper.sort",
+        "key": "ctrl+alt+s",
+        "when": "editorTextFocus && editorLangId == php"
+      },
+      {
+        "command": "phpImportHelper.removeUnused",
+        "key": "ctrl+alt+r",
+        "when": "editorTextFocus && editorLangId == php"
+      },
+      {
+        "command": "phpImportHelper.generateNamespace",
+        "key": "ctrl+alt+g",
+        "when": "editorTextFocus && editorLangId == php"
       }
     ]
   },
@@ -31,7 +220,12 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "npm run compile-tests && mocha --ui tdd \"out/test/unit/**/*.test.js\"",
+    "test:integration": "npm run compile-tests && npm run compile && node ./out/test/runTests.js"
+  },
+  "dependencies": {
+    "php-parser": "^3.6.0"
   },
   "devDependencies": {
     "@types/vscode": "^1.120.0",
@@ -40,6 +234,7 @@
     "typescript-eslint": "^8.59.4",
     "eslint": "^10.4.0",
     "esbuild": "^0.28.0",
+    "mocha": "^11.7.5",
     "npm-run-all": "^4.1.5",
     "typescript": "^6.0.3",
     "@vscode/test-cli": "^0.0.12",
