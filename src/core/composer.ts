@@ -8,20 +8,20 @@ export interface AutoloadConfig {
     psr0: AutoloadMapping[];
 }
 
-type ComposerSection = Record<string, string | string[]>;
+type ComposerSection = Record<string, string[] | string>;
 
 function normalizeNamespace(namespace: string): string {
     return namespace.replace(/\\+$/, '');
 }
 
-function normalizePaths(value: string | string[]): string[] {
+function normalizePaths(value: string[] | string): string[] {
     const paths = Array.isArray(value) ? value : [value];
 
     return paths.map((path) => path.replace(/[\\/]+$/, ''));
 }
 
-function parseSection(section: unknown, key: 'psr-4' | 'psr-0'): AutoloadMapping[] {
-    const mappings = (section as { [name: string]: ComposerSection } | undefined)?.[key] ?? {};
+function parseSection(section: unknown, key: 'psr-0' | 'psr-4'): AutoloadMapping[] {
+    const mappings = (section as Record<string, ComposerSection> | undefined)?.[key] ?? {};
 
     return Object.entries(mappings).map(([namespace, paths]) => ({
         namespace: normalizeNamespace(namespace),

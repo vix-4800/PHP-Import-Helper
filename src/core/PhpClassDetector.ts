@@ -94,7 +94,7 @@ export function sanitizePhpCode(text: string, options: { preservePhpDoc?: boolea
             continue;
         }
 
-        const heredoc = text.slice(index).match(/^<<<'?([A-Za-z_][A-Za-z0-9_]*)'?/);
+        const heredoc = /^<<<'?([A-Za-z_][A-Za-z0-9_]*)'?/.exec(text.slice(index));
 
         if (heredoc) {
             const start = index;

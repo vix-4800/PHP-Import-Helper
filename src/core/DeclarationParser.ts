@@ -6,7 +6,7 @@ const classDeclarationPattern = /^\s*(?:(?:abstract|final|readonly)\s+)*(?:class
 
 function parseUseStatement(text: string, line: number, endLine = line): UseStatement[] {
     const normalized = text.replace(/\s+/g, ' ').trim();
-    const match = normalized.match(/^use\s+(?:(function|const)\s+)?(.+);$/);
+    const match = /^use\s+(?:(function|const)\s+)?(.+);$/.exec(normalized);
 
     if (!match) {
         return [];
@@ -29,7 +29,7 @@ function parseUseStatement(text: string, line: number, endLine = line): UseState
 }
 
 function parseSingleUse(body: string, kind: ImportKind, text: string, line: number, endLine: number): UseStatement | null {
-    const match = body.trim().match(/^(.+?)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?$/i);
+    const match = /^(.+?)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?$/i.exec(body.trim());
 
     if (!match) {
         return null;
@@ -77,14 +77,14 @@ export class DeclarationParser {
                 declarationLines.declare = oneBased;
             }
 
-            const namespaceMatch = line.match(/^\s*(?:<\?php\s+)?namespace\s+([^;]+);/);
+            const namespaceMatch = /^\s*(?:<\?php\s+)?namespace\s+([^;]+);/.exec(line);
 
             if (namespaceMatch && declarationLines.namespace === null) {
                 namespace = namespaceMatch[1].trim();
                 declarationLines.namespace = oneBased;
             }
 
-            const classMatch = line.match(classDeclarationPattern);
+            const classMatch = classDeclarationPattern.exec(line);
 
             if (classMatch) {
                 declarationLines.classDeclaration = oneBased;

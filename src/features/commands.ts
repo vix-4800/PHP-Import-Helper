@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { DeclarationParser } from '../core/DeclarationParser';
+import type { DeclarationParser } from '../core/DeclarationParser';
 import { ImportManager } from '../core/ImportManager';
-import { NamespaceCache } from '../core/NamespaceCache';
+import type { NamespaceCache } from '../core/NamespaceCache';
 import { generateNamespace } from '../core/NamespaceGenerator';
 import { PhpClassDetector } from '../core/PhpClassDetector';
 import { SortManager } from '../core/SortManager';
@@ -46,7 +46,7 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     parser: DeclarationParser,
     cache: NamespaceCache,
-    diagnostics: { update(document: vscode.TextDocument): void },
+    diagnostics: { update: (document: vscode.TextDocument) => void },
 ): void {
     const importManager = new ImportManager(parser);
     const sortManager = new SortManager(parser);

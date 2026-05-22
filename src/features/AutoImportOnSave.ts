@@ -1,8 +1,8 @@
-import * as vscode from 'vscode';
-import { DeclarationParser } from '../core/DeclarationParser';
+import type * as vscode from 'vscode';
+import type { DeclarationParser } from '../core/DeclarationParser';
 import { ImportManager } from '../core/ImportManager';
-import { NamespaceCache } from '../core/NamespaceCache';
-import { PhpClassDetector } from '../core/PhpClassDetector';
+import type { NamespaceCache } from '../core/NamespaceCache';
+import type { PhpClassDetector } from '../core/PhpClassDetector';
 
 export class AutoImportOnSave {
     private readonly importManager: ImportManager;

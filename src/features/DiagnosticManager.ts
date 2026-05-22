@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { builtInClasses } from '../core/builtInClasses';
-import { DeclarationParser } from '../core/DeclarationParser';
-import { NamespaceCache } from '../core/NamespaceCache';
-import { PhpClassDetector } from '../core/PhpClassDetector';
+import type { DeclarationParser } from '../core/DeclarationParser';
+import type { NamespaceCache } from '../core/NamespaceCache';
+import type { PhpClassDetector } from '../core/PhpClassDetector';
 import { DiagnosticCode } from '../types';
 import { getConfig, ignoredClasses } from '../utils/config';
 
