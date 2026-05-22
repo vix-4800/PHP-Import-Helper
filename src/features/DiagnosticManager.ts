@@ -12,7 +12,7 @@ export class DiagnosticManager implements vscode.Disposable {
     public constructor(
         private readonly detector: PhpClassDetector,
         private readonly parser: DeclarationParser,
-        private readonly cache: NamespaceCache,
+        private readonly cache: NamespaceCache
     ) {}
 
     public update(document: vscode.TextDocument): void {
@@ -24,7 +24,11 @@ export class DiagnosticManager implements vscode.Disposable {
         const ignored = new Set(ignoredClasses(document.uri));
         const text = document.getText();
         const parsed = this.parser.parse(text);
-        const imported = new Set(parsed.useStatements.filter((item) => item.kind === 'class').map((item) => item.className));
+        const imported = new Set(
+            parsed.useStatements
+                .filter((item) => item.kind === 'class')
+                .map((item) => item.className)
+        );
         const declared = new Set(parsed.declaredClassNames);
         const detected = this.detector.detectAllWithPositions(text);
         const detectedNames = new Set(detected.map((item) => item.name));
@@ -32,7 +36,12 @@ export class DiagnosticManager implements vscode.Disposable {
 
         if (config.get<boolean>('highlightNotImported', true)) {
             for (const item of detected) {
-                if (ignored.has(item.name) || imported.has(item.name) || declared.has(item.name) || builtInClasses.has(item.name)) {
+                if (
+                    ignored.has(item.name) ||
+                    imported.has(item.name) ||
+                    declared.has(item.name) ||
+                    builtInClasses.has(item.name)
+                ) {
                     continue;
                 }
 
@@ -40,8 +49,17 @@ export class DiagnosticManager implements vscode.Disposable {
                     continue;
                 }
 
-                const range = new vscode.Range(item.line, item.character, item.line, item.character + item.name.length);
-                const diagnostic = new vscode.Diagnostic(range, `Class '${item.name}' is not imported.`, vscode.DiagnosticSeverity.Warning);
+                const range = new vscode.Range(
+                    item.line,
+                    item.character,
+                    item.line,
+                    item.character + item.name.length
+                );
+                const diagnostic = new vscode.Diagnostic(
+                    range,
+                    `Class '${item.name}' is not imported.`,
+                    vscode.DiagnosticSeverity.Warning
+                );
                 diagnostic.code = DiagnosticCode.ClassNotImported;
                 diagnostic.source = 'PHP Import Helper';
                 diagnostics.push(diagnostic);
@@ -54,11 +72,22 @@ export class DiagnosticManager implements vscode.Disposable {
                     continue;
                 }
 
-                const usedAsPrefix = new RegExp(`\\b${statement.className}\\\\[A-Za-z_]`).test(text);
+                const usedAsPrefix = new RegExp(`\\b${statement.className}\\\\[A-Za-z_]`).test(
+                    text
+                );
 
                 if (!detectedNames.has(statement.className) && !usedAsPrefix) {
-                    const range = new vscode.Range(statement.line - 1, 0, statement.line - 1, statement.text.length);
-                    const diagnostic = new vscode.Diagnostic(range, `Imported class '${statement.className}' is not used.`, vscode.DiagnosticSeverity.Hint);
+                    const range = new vscode.Range(
+                        statement.line - 1,
+                        0,
+                        statement.line - 1,
+                        statement.text.length
+                    );
+                    const diagnostic = new vscode.Diagnostic(
+                        range,
+                        `Imported class '${statement.className}' is not used.`,
+                        vscode.DiagnosticSeverity.Hint
+                    );
                     diagnostic.code = DiagnosticCode.ClassNotUsed;
                     diagnostic.source = 'PHP Import Helper';
                     diagnostic.tags = [vscode.DiagnosticTag.Unnecessary];
@@ -83,6 +112,8 @@ export class DiagnosticManager implements vscode.Disposable {
             return this.cache.resolve(className).some((item) => item.fqcn === className);
         }
 
-        return this.cache.resolve(className).some((item) => item.fqcn === `${namespace}\\${className}`);
+        return this.cache
+            .resolve(className)
+            .some((item) => item.fqcn === `${namespace}\\${className}`);
     }
 }

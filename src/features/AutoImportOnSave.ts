@@ -10,7 +10,7 @@ export class AutoImportOnSave {
     public constructor(
         private readonly detector: PhpClassDetector,
         private readonly parser: DeclarationParser,
-        private readonly cache: NamespaceCache,
+        private readonly cache: NamespaceCache
     ) {
         this.importManager = new ImportManager(parser);
     }
