@@ -1,35 +1,26 @@
 import * as vscode from 'vscode';
 import { DeclarationParser } from './DeclarationParser';
+import { NamespaceIndex } from './NamespaceIndex';
 import type { CacheEntry, ResolvedNamespace } from '../types';
 
 export class NamespaceCache {
-    private readonly entries = new Map<string, CacheEntry[]>();
+    private readonly index = new NamespaceIndex();
     private readonly parser = new DeclarationParser();
 
     public setEntries(entries: CacheEntry[]): void {
-        this.entries.clear();
-
-        for (const entry of entries) {
-            this.add(entry);
-        }
+        this.index.setEntries(entries);
     }
 
     public add(entry: CacheEntry): void {
-        const list = this.entries.get(entry.className) ?? [];
-        list.push(entry);
-        this.entries.set(entry.className, list);
+        this.index.add(entry);
     }
 
     public lookup(className: string): CacheEntry[] {
-        return this.entries.get(className) ?? [];
+        return this.index.lookup(className) as CacheEntry[];
     }
 
     public resolve(className: string): ResolvedNamespace[] {
-        return this.lookup(className).map((entry) => ({
-            fqcn: entry.fqcn,
-            source: entry.fqcn.includes('\\') ? 'project' : 'global',
-            uri: entry.uri,
-        }));
+        return this.index.resolve(className);
     }
 
     public async rebuild(fixtures?: CacheEntry[]): Promise<void> {
@@ -38,7 +29,7 @@ export class NamespaceCache {
             return;
         }
 
-        this.entries.clear();
+        this.index.clear();
 
         const files = await vscode.workspace.findFiles('**/*.php', '**/{vendor,node_modules}/**');
 
