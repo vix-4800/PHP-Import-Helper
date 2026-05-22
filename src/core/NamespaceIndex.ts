@@ -7,6 +7,21 @@ type IndexedEntry = Omit<CacheEntry, 'uri'> & {
 export class NamespaceIndex {
     private readonly entries = new Map<string, IndexedEntry[]>();
 
+    public static entriesFromPhpFile(uri: { fsPath: string }, text: string): IndexedEntry[] {
+        const namespace = /^\s*namespace\s+([^;]+);/m.exec(text)?.[1].trim() ?? null;
+        const declarations = [
+            ...text.matchAll(
+                /^\s*(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_][A-Za-z0-9_]*)\b/gm
+            ),
+        ].map((match) => match[1]);
+
+        return declarations.map((className) => ({
+            className,
+            fqcn: namespace === null ? className : `${namespace}\\${className}`,
+            uri,
+        }));
+    }
+
     public setEntries(entries: IndexedEntry[]): void {
         this.entries.clear();
 

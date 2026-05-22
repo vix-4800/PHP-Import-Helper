@@ -1,11 +1,9 @@
 import * as vscode from 'vscode';
-import { DeclarationParser } from './DeclarationParser';
 import { NamespaceIndex } from './NamespaceIndex';
 import type { CacheEntry, ResolvedNamespace } from '../types';
 
 export class NamespaceCache {
     private readonly index = new NamespaceIndex();
-    private readonly parser = new DeclarationParser();
 
     public setEntries(entries: CacheEntry[]): void {
         this.index.setEntries(entries);
@@ -35,12 +33,9 @@ export class NamespaceCache {
 
         for (const uri of files) {
             const document = await vscode.workspace.openTextDocument(uri);
-            const parsed = this.parser.parse(document.getText());
 
-            for (const className of parsed.declaredClassNames) {
-                const fqcn =
-                    parsed.namespace === null ? className : `${parsed.namespace}\\${className}`;
-                this.add({ fqcn, className, uri });
+            for (const entry of NamespaceIndex.entriesFromPhpFile(uri, document.getText())) {
+                this.add(entry as CacheEntry);
             }
         }
     }

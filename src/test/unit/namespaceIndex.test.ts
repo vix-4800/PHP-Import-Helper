@@ -47,4 +47,44 @@ suite('NamespaceIndex', () => {
         assert.deepStrictEqual(index.resolve('Controller').map((item) => item.source), ['project']);
         assert.deepStrictEqual(index.resolve('Collection').map((item) => item.source), ['vendor']);
     });
+
+    test('creates entries for every class-like declaration in a PHP file', () => {
+        const entries = NamespaceIndex.entriesFromPhpFile(
+            { fsPath: '/project/app/Domain/User.php' },
+            `<?php
+
+namespace App\\Domain;
+
+final class User {}
+interface UserRepository {}
+trait HasUuid {}
+enum Status: string {}
+`
+        );
+
+        assert.deepStrictEqual(entries.map((entry) => entry.fqcn), [
+            'App\\Domain\\User',
+            'App\\Domain\\UserRepository',
+            'App\\Domain\\HasUuid',
+            'App\\Domain\\Status',
+        ]);
+    });
+
+    test('creates global entries for files without namespace', () => {
+        const entries = NamespaceIndex.entriesFromPhpFile(
+            { fsPath: '/project/vendor/mockery/mockery/library/Mockery.php' },
+            `<?php
+
+class Mockery {}
+`
+        );
+
+        assert.deepStrictEqual(entries, [
+            {
+                className: 'Mockery',
+                fqcn: 'Mockery',
+                uri: { fsPath: '/project/vendor/mockery/mockery/library/Mockery.php' },
+            },
+        ]);
+    });
 });
