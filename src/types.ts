@@ -1,7 +1,7 @@
 import type * as vscode from 'vscode';
 
-export type ImportKind = 'class' | 'function' | 'const';
-export type SortMode = 'natural' | 'length' | 'alphabetical';
+export type ImportKind = 'class' | 'const' | 'function';
+export type SortMode = 'alphabetical' | 'length' | 'natural';
 
 export interface DeclarationLines {
     phpTag: number;
@@ -37,7 +37,7 @@ export interface DetectedClass {
 
 export interface ResolvedNamespace {
     fqcn: string;
-    source: 'project' | 'vendor' | 'global';
+    source: 'global' | 'project' | 'vendor';
     uri?: vscode.Uri;
 }
 
