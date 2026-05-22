@@ -25,4 +25,20 @@ class Foo {}
     test('throws when fewer than two imports exist', () => {
         assert.throws(() => sorter.sortText("<?php\n\nuse App\\User;\n\nclass Foo {}\n", 'length'), /Nothing to sort/);
     });
+
+    test('collapses grouped imports when sorting kept statements', () => {
+        const document = `<?php
+
+use App\\Models\\{User, Post};
+use Illuminate\\Http\\Request;
+
+class Foo {}
+`;
+
+        const text = sorter.sortText(document, 'alphabetical');
+
+        assert.ok(text.includes('use App\\Models\\Post;'));
+        assert.ok(text.includes('use App\\Models\\User;'));
+        assert.ok(!text.includes('use App\\Models\\{'));
+    });
 });

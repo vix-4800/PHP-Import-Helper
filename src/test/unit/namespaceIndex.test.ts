@@ -1,0 +1,50 @@
+import * as assert from 'assert';
+import { NamespaceIndex } from '../../core/NamespaceIndex';
+
+suite('NamespaceIndex', () => {
+    test('stores multiple candidates for the same short class name', () => {
+        const index = new NamespaceIndex();
+        index.setEntries([
+            {
+                className: 'Request',
+                fqcn: 'App\\Http\\Request',
+                uri: { fsPath: '/project/app/Http/Request.php' },
+            },
+            {
+                className: 'Request',
+                fqcn: 'Vendor\\Http\\Request',
+                uri: { fsPath: '/project/vendor/vendor/http/Request.php' },
+            },
+        ]);
+
+        assert.deepStrictEqual(index.resolve('Request').map((item) => item.fqcn), [
+            'App\\Http\\Request',
+            'Vendor\\Http\\Request',
+        ]);
+    });
+
+    test('classifies global, project, and vendor sources', () => {
+        const index = new NamespaceIndex();
+        index.setEntries([
+            {
+                className: 'Mockery',
+                fqcn: 'Mockery',
+                uri: { fsPath: '/project/vendor/mockery/mockery/library/Mockery.php' },
+            },
+            {
+                className: 'Controller',
+                fqcn: 'App\\Http\\Controller',
+                uri: { fsPath: '/project/app/Http/Controller.php' },
+            },
+            {
+                className: 'Collection',
+                fqcn: 'Illuminate\\Support\\Collection',
+                uri: { fsPath: '/project/vendor/laravel/framework/src/Illuminate/Support/Collection.php' },
+            },
+        ]);
+
+        assert.deepStrictEqual(index.resolve('Mockery').map((item) => item.source), ['global']);
+        assert.deepStrictEqual(index.resolve('Controller').map((item) => item.source), ['project']);
+        assert.deepStrictEqual(index.resolve('Collection').map((item) => item.source), ['vendor']);
+    });
+});

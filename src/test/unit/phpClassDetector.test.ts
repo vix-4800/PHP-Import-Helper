@@ -94,4 +94,45 @@ SQL;
         assert.ok(!result.includes('TModel'));
         assert.ok(!result.includes('Hidden'));
     });
+
+    test('detects no-capture catch, DNF types, variadic params, and typed constants', () => {
+        const result = detector.detectAll(`<?php
+
+class Foo {
+    public const ErrorCode|Status RESULT = null;
+    private (Iterator&Countable)|null $items;
+
+    public function merge(Collection ...$collections): (Stringable&Countable)|null
+    {
+        try {
+        } catch (InvalidArgumentException | LogicException) {
+        }
+    }
+}
+`);
+
+        for (const name of [
+            'ErrorCode',
+            'Status',
+            'Iterator',
+            'Countable',
+            'Collection',
+            'Stringable',
+            'InvalidArgumentException',
+            'LogicException',
+        ]) {
+            assert.ok(result.includes(name), `${name} missing`);
+        }
+    });
+
+    test('does not detect variable static access or anonymous class expressions', () => {
+        const result = detector.detectAll(`<?php
+
+$model::query();
+$object = new class {};
+$real = new Service();
+`);
+
+        assert.deepStrictEqual(result, ['Service']);
+    });
 });

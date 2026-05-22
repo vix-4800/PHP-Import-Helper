@@ -61,7 +61,7 @@ class Foo {
 
         assert.ok(text.includes('use App\\Models\\User;'));
         assert.ok(!text.includes('Post'));
-        assert.ok(!text.includes('{'));
+        assert.ok(!text.includes('use App\\Models\\{'));
     });
 
     test('preserves grouped import aliases when removing unused siblings', () => {

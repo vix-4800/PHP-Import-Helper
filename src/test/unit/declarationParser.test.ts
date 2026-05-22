@@ -76,4 +76,38 @@ class Foo {}
 
         assert.strictEqual(result, 'cl');
     });
+
+    test('class import names skip function and const imports', () => {
+        const result = parser.getImportedClassNames(`<?php
+
+use App\\Models\\User;
+use function App\\Helpers\\helper;
+use const App\\Config\\VERSION;
+
+class Foo {}
+`);
+
+        assert.deepStrictEqual(result, ['User']);
+    });
+
+    test('detects readonly and final readonly declared class names', () => {
+        assert.deepStrictEqual(parser.getDeclaredClassNames(`<?php
+
+readonly class ValueObject {}
+`), ['ValueObject']);
+
+        assert.deepStrictEqual(parser.getDeclaredClassNames(`<?php
+
+final readonly class UserDTO {}
+`), ['UserDTO']);
+    });
+
+    test('throws when class in grouped import is already imported', () => {
+        assert.throws(() => parser.parse(`<?php
+
+use App\\Models\\{User, Post};
+
+class Foo {}
+`, 'App\\Models\\User'), /already imported/);
+    });
 });
