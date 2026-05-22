@@ -1,26 +1,73 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { DeclarationParser } from './core/DeclarationParser';
+import { ImportManager } from './core/ImportManager';
+import { NamespaceCache } from './core/NamespaceCache';
+import { PhpClassDetector } from './core/PhpClassDetector';
+import { SortManager } from './core/SortManager';
+import { AutoImportOnSave } from './features/AutoImportOnSave';
+import { PhpCodeActionProvider } from './features/CodeActionProvider';
+import { registerCommands } from './features/commands';
+import { DiagnosticManager } from './features/DiagnosticManager';
+import { UseFoldingRangeProvider } from './features/UseFoldingRangeProvider';
+import { getConfig, sortMode } from './utils/config';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export function activate(context: vscode.ExtensionContext): void {
+    const parser = new DeclarationParser();
+    const detector = new PhpClassDetector();
+    const cache = new NamespaceCache();
+    const diagnostics = new DiagnosticManager(detector, parser, cache);
+    const importManager = new ImportManager(parser);
+    const sortManager = new SortManager(parser);
+    const autoImport = new AutoImportOnSave(detector, parser, cache);
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "php-import-helper" is now active!');
+    context.subscriptions.push(
+        diagnostics,
+        vscode.languages.registerCodeActionsProvider({ language: 'php' }, new PhpCodeActionProvider(), {
+            providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
+        }),
+        vscode.languages.registerFoldingRangeProvider({ language: 'php' }, new UseFoldingRangeProvider()),
+        vscode.workspace.onDidOpenTextDocument((document) => diagnostics.update(document)),
+        vscode.workspace.onDidChangeTextDocument((event) => diagnostics.update(event.document)),
+        vscode.workspace.onDidCloseTextDocument((document) => diagnostics.clear(document.uri)),
+        vscode.workspace.onWillSaveTextDocument((event) => {
+            if (event.document.languageId !== 'php') {
+                return;
+            }
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('php-import-helper.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from PHP Import Helper!');
-	});
+            let text = event.document.getText();
+            const config = getConfig(event.document.uri);
 
-	context.subscriptions.push(disposable);
+            if (config.get<boolean>('autoImportOnSave', false)) {
+                text = autoImport.computeText(event.document);
+            }
+
+            if (config.get<boolean>('removeOnSave', false)) {
+                text = importManager.removeUnused(text);
+            }
+
+            if (config.get<boolean>('sortOnSave', false)) {
+                try {
+                    text = sortManager.sortText(text, sortMode(event.document.uri));
+                } catch {
+                    return;
+                }
+            }
+
+            if (text !== event.document.getText()) {
+                const range = new vscode.Range(
+                    event.document.positionAt(0),
+                    event.document.positionAt(event.document.getText().length),
+                );
+                event.waitUntil(Promise.resolve([vscode.TextEdit.replace(range, text)]));
+            }
+        }),
+    );
+
+    registerCommands(context, parser, cache, diagnostics);
+
+    for (const document of vscode.workspace.textDocuments) {
+        diagnostics.update(document);
+    }
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate(): void {}
