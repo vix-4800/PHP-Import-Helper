@@ -22,10 +22,17 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         diagnostics,
-        vscode.languages.registerCodeActionsProvider({ language: 'php' }, new PhpCodeActionProvider(), {
-            providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
-        }),
-        vscode.languages.registerFoldingRangeProvider({ language: 'php' }, new UseFoldingRangeProvider()),
+        vscode.languages.registerCodeActionsProvider(
+            { language: 'php' },
+            new PhpCodeActionProvider(),
+            {
+                providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
+            }
+        ),
+        vscode.languages.registerFoldingRangeProvider(
+            { language: 'php' },
+            new UseFoldingRangeProvider()
+        ),
         vscode.workspace.onDidOpenTextDocument((document) => diagnostics.update(document)),
         vscode.workspace.onDidChangeTextDocument((event) => diagnostics.update(event.document)),
         vscode.workspace.onDidCloseTextDocument((document) => diagnostics.clear(document.uri)),
@@ -56,11 +63,11 @@ export function activate(context: vscode.ExtensionContext): void {
             if (text !== event.document.getText()) {
                 const range = new vscode.Range(
                     event.document.positionAt(0),
-                    event.document.positionAt(event.document.getText().length),
+                    event.document.positionAt(event.document.getText().length)
                 );
                 event.waitUntil(Promise.resolve([vscode.TextEdit.replace(range, text)]));
             }
-        }),
+        })
     );
 
     registerCommands(context, parser, cache, diagnostics);
