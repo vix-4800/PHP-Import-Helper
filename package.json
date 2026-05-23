@@ -4,6 +4,10 @@
   "description": "Import, expand, sort, diagnose, and manage PHP namespaces",
   "version": "0.0.1",
   "publisher": "vix",
+  "author": {
+    "name": "Anton VIX",
+    "url": "https://github.com/vix-4800"
+  },
   "license": "MIT",
   "engines": {
     "vscode": "^1.120.0"
@@ -16,9 +20,12 @@
   "keywords": [
     "php",
     "namespace",
+    "class",
     "import",
+    "expand",
     "autoload",
-    "psr-4"
+    "psr-4",
+    "php8"
   ],
   "activationEvents": [
     "onLanguage:php"
@@ -207,6 +214,13 @@
         "when": "editorTextFocus && editorLangId == php"
       }
     ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vix-4800/PHP-Import-Helper.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vix-4800/PHP-Import-Helper/issues"
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
