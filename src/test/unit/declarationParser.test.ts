@@ -168,4 +168,31 @@ use App\\Models\\Post;
 
         assert.deepStrictEqual(result.useStatements.map((statement) => statement.className), ['User']);
     });
+
+    test('falls back to declaration scanning when parser reports syntax errors', () => {
+        const result = parser.parse(`<?php
+
+namespace App\\Broken;
+
+use App\\Models\\User;
+use App\\Models\\Post as BlogPost;
+
+class Foo {
+    public private(set) PropertyValue $value {
+        set(HookValue $value) => $this->value = $value;
+    }
+}
+`);
+
+        assert.strictEqual(result.namespace, 'App\\Broken');
+        assert.deepStrictEqual(result.useStatements.map((statement) => ({
+            fqcn: statement.fqcn,
+            className: statement.className,
+            alias: statement.alias,
+        })), [
+            { fqcn: 'App\\Models\\User', className: 'User', alias: null },
+            { fqcn: 'App\\Models\\Post', className: 'BlogPost', alias: 'BlogPost' },
+        ]);
+        assert.deepStrictEqual(result.declaredClassNames, ['Foo']);
+    });
 });

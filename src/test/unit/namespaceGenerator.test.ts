@@ -1,5 +1,9 @@
 import * as assert from 'assert';
-import { applyGeneratedNamespace, generateNamespace } from '../../core/NamespaceGenerator';
+import {
+    applyGeneratedNamespace,
+    findNearestComposerPath,
+    generateNamespace,
+} from '../../core/NamespaceGenerator';
 import { parseAutoload } from '../../core/composer';
 
 suite('generateNamespace', () => {
@@ -48,5 +52,41 @@ namespace App\\Models;
 
 class Foo {}
 `);
+    });
+
+    test('finds nearest composer json walking upward to workspace root', async () => {
+        const checked: string[] = [];
+        const result = await findNearestComposerPath(
+            '/project/packages/blog/src/Controller/PostController.php',
+            '/project',
+            async (candidate) => {
+                checked.push(candidate);
+
+                return candidate === '/project/packages/blog/composer.json';
+            }
+        );
+
+        assert.strictEqual(result, '/project/packages/blog/composer.json');
+        assert.deepStrictEqual(checked, [
+            '/project/packages/blog/src/Controller/composer.json',
+            '/project/packages/blog/src/composer.json',
+            '/project/packages/blog/composer.json',
+        ]);
+    });
+
+    test('does not search above workspace root for composer json', async () => {
+        const checked: string[] = [];
+        const result = await findNearestComposerPath(
+            '/project/packages/blog/src/Post.php',
+            '/project/packages',
+            async (candidate) => {
+                checked.push(candidate);
+
+                return false;
+            }
+        );
+
+        assert.strictEqual(result, null);
+        assert.ok(!checked.includes('/project/composer.json'));
     });
 });
