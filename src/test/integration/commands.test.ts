@@ -53,6 +53,31 @@ class Foo extends Controller {}
         assert.ok(getText(editor).includes('\\App\\Http\\Controller'));
     });
 
+    test('expand command respects leadingSeparator setting', async () => {
+        const editor = await openPhpEditor(`<?php
+
+class Foo extends Controller {}
+`);
+        const config = vscode.workspace.getConfiguration('phpImportHelper');
+        const previous = config.get<boolean>('leadingSeparator', true);
+        const position = new vscode.Position(2, 20);
+        editor.selection = new vscode.Selection(position, position);
+
+        try {
+            await config.update('leadingSeparator', false, vscode.ConfigurationTarget.Global);
+            await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
+                { className: 'Controller', fqcn: 'App\\Http\\Controller', uri: editor.document.uri },
+            ]);
+            await vscode.commands.executeCommand('phpImportHelper.expand');
+            await wait();
+
+            assert.ok(getText(editor).includes('extends App\\Http\\Controller'));
+            assert.ok(!getText(editor).includes('extends \\App\\Http\\Controller'));
+        } finally {
+            await config.update('leadingSeparator', previous, vscode.ConfigurationTarget.Global);
+        }
+    });
+
     test('import command sorts imports when autoSort is enabled', async () => {
         const editor = await openPhpEditor(`<?php
 
@@ -97,5 +122,22 @@ class Foo {
         assert.ok(text.includes('use App\\Http\\Response;'));
         assert.ok(text.includes('new cl()'));
         assert.strictEqual((text.match(/yii\\httpclient\\Client/g) ?? []).length, 1);
+    });
+
+    test('import all skips ambiguous unresolved classes', async () => {
+        const editor = await openPhpEditor(`<?php
+
+class Foo extends Request {}
+`);
+
+        await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
+            { className: 'Request', fqcn: 'App\\Http\\Request', uri: editor.document.uri },
+            { className: 'Request', fqcn: 'Vendor\\Http\\Request', uri: editor.document.uri },
+        ]);
+        await vscode.commands.executeCommand('phpImportHelper.importAll');
+        await wait();
+
+        assert.ok(!getText(editor).includes('use App\\Http\\Request;'));
+        assert.ok(!getText(editor).includes('use Vendor\\Http\\Request;'));
     });
 });
