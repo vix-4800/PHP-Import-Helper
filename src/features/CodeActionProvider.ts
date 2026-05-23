@@ -7,7 +7,6 @@ export class PhpCodeActionProvider implements vscode.CodeActionProvider {
         range: vscode.Range,
         context: vscode.CodeActionContext
     ): vscode.CodeAction[] {
-        void document;
         void range;
 
         const actions: vscode.CodeAction[] = [];
@@ -22,7 +21,11 @@ export class PhpCodeActionProvider implements vscode.CodeActionProvider {
                     'Import class',
                     vscode.CodeActionKind.QuickFix
                 );
-                importAction.command = { command: 'phpImportHelper.import', title: 'Import Class' };
+                importAction.command = {
+                    command: 'phpImportHelper.import',
+                    title: 'Import Class',
+                    arguments: [document.getText(diagnostic.range), diagnostic.range],
+                };
                 importAction.diagnostics = [diagnostic];
                 importAction.isPreferred = true;
                 actions.push(importAction);
@@ -31,7 +34,11 @@ export class PhpCodeActionProvider implements vscode.CodeActionProvider {
                     'Expand to fully qualified name',
                     vscode.CodeActionKind.QuickFix
                 );
-                expandAction.command = { command: 'phpImportHelper.expand', title: 'Expand Class' };
+                expandAction.command = {
+                    command: 'phpImportHelper.expand',
+                    title: 'Expand Class',
+                    arguments: [document.getText(diagnostic.range), diagnostic.range],
+                };
                 expandAction.diagnostics = [diagnostic];
                 actions.push(expandAction);
             }

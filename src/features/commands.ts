@@ -4,12 +4,13 @@ import * as path from 'path';
 import type { DeclarationParser } from '../core/DeclarationParser';
 import { ImportManager } from '../core/ImportManager';
 import type { NamespaceCache } from '../core/NamespaceCache';
-import { generateNamespace } from '../core/NamespaceGenerator';
+import { applyGeneratedNamespace, generateNamespace } from '../core/NamespaceGenerator';
 import { PhpClassDetector } from '../core/PhpClassDetector';
 import { SortManager } from '../core/SortManager';
+import { UseFoldingRangeCalculator } from '../core/UseFoldingRangeCalculator';
 import { parseAutoload } from '../core/composer';
 import type { CacheEntry } from '../types';
-import { leadingSeparator, sortMode } from '../utils/config';
+import { getConfig, leadingSeparator, sortMode } from '../utils/config';
 
 function activePhpEditor(): vscode.TextEditor | null {
     const editor = vscode.window.activeTextEditor;
@@ -28,6 +29,22 @@ function selectedWord(editor: vscode.TextEditor): string | null {
         : (editor.document.getText(range).replace(/^\\+/, '').split('\\').pop() ?? null);
 }
 
+function targetWord(editor: vscode.TextEditor, className?: string): string | null {
+    return className ?? selectedWord(editor);
+}
+
+function sortWhenConfigured(text: string, uri: vscode.Uri, sortManager: SortManager): string {
+    if (!getConfig(uri).get<boolean>('autoSort', true)) {
+        return text;
+    }
+
+    try {
+        return sortManager.sortText(text, sortMode(uri));
+    } catch {
+        return text;
+    }
+}
+
 async function replaceDocument(editor: vscode.TextEditor, text: string): Promise<void> {
     const fullRange = new vscode.Range(
         editor.document.positionAt(0),
@@ -37,8 +54,12 @@ async function replaceDocument(editor: vscode.TextEditor, text: string): Promise
     await editor.edit((edit) => edit.replace(fullRange, text));
 }
 
-async function replaceSelectedWord(editor: vscode.TextEditor, replacement: string): Promise<void> {
-    const range = editor.document.getWordRangeAtPosition(
+async function replaceTargetWord(
+    editor: vscode.TextEditor,
+    replacement: string,
+    targetRange?: vscode.Range
+): Promise<void> {
+    const range = targetRange ?? editor.document.getWordRangeAtPosition(
         editor.selection.active,
         /\\?[A-Za-z_][A-Za-z0-9_\\]*/
     );
@@ -48,6 +69,21 @@ async function replaceSelectedWord(editor: vscode.TextEditor, replacement: strin
     }
 
     await editor.edit((edit) => edit.replace(range, replacement));
+}
+
+export async function foldUsesInEditor(editor: vscode.TextEditor): Promise<void> {
+    const calculator = new UseFoldingRangeCalculator();
+    const ranges = calculator.calculate(
+        Array.from({ length: editor.document.lineCount }, (_, line) => editor.document.lineAt(line).text)
+    );
+
+    if (ranges.length === 0) {
+        return;
+    }
+
+    await vscode.commands.executeCommand('editor.fold', {
+        selectionLines: ranges.map((range) => range.startLine),
+    });
 }
 
 export function registerCommands(
@@ -99,13 +135,16 @@ export function registerCommands(
             await replaceDocument(editor, importManager.removeUnused(editor.document.getText()));
             diagnostics.update(editor.document);
         }),
-        vscode.commands.registerCommand('phpImportHelper.expand', async () => {
+        vscode.commands.registerCommand('phpImportHelper.expand', async (
+            className?: string,
+            targetRange?: vscode.Range
+        ) => {
             const editor = activePhpEditor();
             if (editor === null) {
                 return;
             }
 
-            const word = selectedWord(editor);
+            const word = targetWord(editor, className);
             if (word === null) {
                 return;
             }
@@ -116,15 +155,15 @@ export function registerCommands(
             }
 
             const prefix = leadingSeparator(editor.document.uri) ? '\\' : '';
-            await replaceSelectedWord(editor, `${prefix}${resolved[0].fqcn}`);
+            await replaceTargetWord(editor, `${prefix}${resolved[0].fqcn}`, targetRange);
         }),
-        vscode.commands.registerCommand('phpImportHelper.import', async () => {
+        vscode.commands.registerCommand('phpImportHelper.import', async (className?: string) => {
             const editor = activePhpEditor();
             if (editor === null) {
                 return;
             }
 
-            const word = selectedWord(editor);
+            const word = targetWord(editor, className);
             if (word === null) {
                 return;
             }
@@ -134,10 +173,8 @@ export function registerCommands(
                 return;
             }
 
-            await replaceDocument(
-                editor,
-                importManager.addImport(editor.document.getText(), resolved[0].fqcn)
-            );
+            const importedText = importManager.addImport(editor.document.getText(), resolved[0].fqcn);
+            await replaceDocument(editor, sortWhenConfigured(importedText, editor.document.uri, sortManager));
             diagnostics.update(editor.document);
         }),
         vscode.commands.registerCommand('phpImportHelper.importAll', async () => {
@@ -163,11 +200,17 @@ export function registerCommands(
             }
 
             text = importManager.replaceImportedFullyQualifiedClasses(text);
+            text = sortWhenConfigured(text, editor.document.uri, sortManager);
             await replaceDocument(editor, text);
             diagnostics.update(editor.document);
         }),
         vscode.commands.registerCommand('phpImportHelper.foldUses', async () => {
-            await vscode.commands.executeCommand('editor.foldAllMarkerRegions');
+            const editor = activePhpEditor();
+            if (editor === null) {
+                return;
+            }
+
+            await foldUsesInEditor(editor);
         }),
         vscode.commands.registerCommand('phpImportHelper.generateNamespace', async () => {
             const editor = activePhpEditor();
@@ -191,8 +234,9 @@ export function registerCommands(
                 parseAutoload(JSON.parse(composerText) as unknown)
             );
             if (namespace !== null && namespace !== '') {
-                await editor.edit((edit) =>
-                    edit.insert(new vscode.Position(1, 0), `\nnamespace ${namespace};\n`)
+                await replaceDocument(
+                    editor,
+                    applyGeneratedNamespace(editor.document.getText(), namespace, parser)
                 );
             }
         })
