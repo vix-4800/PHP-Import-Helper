@@ -43,4 +43,28 @@ class Foo extends Controller {}
         assert.ok(actions?.some((action) => action.title === 'Expand to fully qualified name'));
         assert.ok(actions?.some((action) => action.title === 'Remove unused import'));
     });
+
+    test('quick fixes pass diagnostic target to import and expand commands', async () => {
+        const document = await createPhpDocument(`<?php
+
+class Foo extends Controller {}
+`);
+
+        await vscode.commands.executeCommand('phpImportHelper.refreshDiagnostics', document.uri);
+        await wait();
+
+        const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+            'vscode.executeCodeActionProvider',
+            document.uri,
+            new vscode.Range(2, 18, 2, 28),
+            vscode.CodeActionKind.QuickFix.value,
+        );
+        const importAction = actions?.find((action) => action.title === 'Import class');
+        const expandAction = actions?.find((action) => action.title === 'Expand to fully qualified name');
+
+        assert.strictEqual(importAction?.command?.arguments?.[0], 'Controller');
+        assert.ok(importAction?.command?.arguments?.[1] instanceof vscode.Range);
+        assert.strictEqual(expandAction?.command?.arguments?.[0], 'Controller');
+        assert.ok(expandAction?.command?.arguments?.[1] instanceof vscode.Range);
+    });
 });
