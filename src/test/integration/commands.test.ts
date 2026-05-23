@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { getText, openPhpEditor, wait } from './helper';
+import { getText, openPhpEditor, openWorkspaceFile, testWorkspaceRoot, wait } from './helper';
 
 suite('commands', () => {
     test('sort command sorts imports in active PHP editor', async () => {
@@ -139,5 +139,54 @@ class Foo extends Request {}
 
         assert.ok(!getText(editor).includes('use App\\Http\\Request;'));
         assert.ok(!getText(editor).includes('use Vendor\\Http\\Request;'));
+    });
+
+    test('generate namespace inserts namespace from nearest composer json', async () => {
+        await vscode.workspace.fs.createDirectory(
+            vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures')
+        );
+        await vscode.workspace.fs.writeFile(
+            vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures', 'composer.json'),
+            Buffer.from(JSON.stringify({ autoload: { 'psr-4': { 'Root\\': 'root/' } } }), 'utf8')
+        );
+        await vscode.workspace.fs.createDirectory(
+            vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures', 'package')
+        );
+        await vscode.workspace.fs.writeFile(
+            vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures', 'package', 'composer.json'),
+            Buffer.from(JSON.stringify({ autoload: { 'psr-4': { 'Package\\': 'src/' } } }), 'utf8')
+        );
+        const editor = await openWorkspaceFile('package/src/Http/Controller.php', `<?php
+
+class Controller {}
+`);
+
+        await vscode.commands.executeCommand('phpImportHelper.generateNamespace');
+        await wait();
+
+        assert.ok(getText(editor).includes('namespace Package\\Http;'));
+        assert.ok(!getText(editor).includes('namespace Root\\'));
+    });
+
+    test('generate namespace replaces existing namespace', async () => {
+        await vscode.workspace.fs.createDirectory(
+            vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures', 'replace')
+        );
+        await vscode.workspace.fs.writeFile(
+            vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures', 'replace', 'composer.json'),
+            Buffer.from(JSON.stringify({ autoload: { 'psr-4': { 'App\\': 'src/' } } }), 'utf8')
+        );
+        const editor = await openWorkspaceFile('replace/src/Model/User.php', `<?php
+
+namespace Old\\Name;
+
+class User {}
+`);
+
+        await vscode.commands.executeCommand('phpImportHelper.generateNamespace');
+        await wait();
+
+        assert.ok(getText(editor).includes('namespace App\\Model;'));
+        assert.ok(!getText(editor).includes('namespace Old\\Name;'));
     });
 });
