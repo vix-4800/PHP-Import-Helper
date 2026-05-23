@@ -9,6 +9,31 @@ export function generateNamespace(filePath: string, autoload: AutoloadConfig): s
     return resolveNamespace(directory, autoload);
 }
 
+export async function findNearestComposerPath(
+    filePath: string,
+    workspaceRoot: string,
+    exists: (candidate: string) => Promise<boolean>
+): Promise<string | null> {
+    const root = path.resolve(workspaceRoot);
+    let current = path.dirname(path.resolve(filePath));
+
+    while (current.startsWith(root)) {
+        const candidate = path.join(current, 'composer.json');
+
+        if (await exists(candidate)) {
+            return candidate;
+        }
+
+        if (current === root) {
+            break;
+        }
+
+        current = path.dirname(current);
+    }
+
+    return null;
+}
+
 export function applyGeneratedNamespace(
     text: string,
     namespace: string,
