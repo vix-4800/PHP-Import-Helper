@@ -42,6 +42,10 @@ export class NamespaceIndex {
         }
     }
 
+    public toEntries(): IndexedEntry[] {
+        return [...this.entries.values()].flat();
+    }
+
     public replaceFile(uri: { fsPath: string }, entries: IndexedEntry[]): void {
         this.removeFile(uri);
 
