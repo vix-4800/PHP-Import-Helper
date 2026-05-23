@@ -4,12 +4,17 @@ import type { CacheEntry, ResolvedNamespace } from '../types';
 import { getConfig } from '../utils/config';
 
 export class NamespaceCache implements vscode.Disposable {
+    private static readonly indexVersion = 1;
+    private static readonly indexFileName = 'namespace-index.json';
+
     private readonly index = new NamespaceIndex();
     private watcher: vscode.FileSystemWatcher | null = null;
     private readonly updateTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly onDidUpdateEmitter = new vscode.EventEmitter<void>();
 
     public readonly onDidUpdate = this.onDidUpdateEmitter.event;
+
+    public constructor(private readonly storageUri?: vscode.Uri) {}
 
     public setEntries(entries: CacheEntry[]): void {
         this.index.setEntries(entries);
@@ -30,6 +35,7 @@ export class NamespaceCache implements vscode.Disposable {
     public async rebuild(fixtures?: CacheEntry[]): Promise<void> {
         if (fixtures !== undefined) {
             this.setEntries(fixtures);
+            await this.persistIndex();
             this.onDidUpdateEmitter.fire();
             return;
         }
@@ -45,17 +51,25 @@ export class NamespaceCache implements vscode.Disposable {
             await this.indexFile(uri);
         }
 
+        await this.persistIndex();
         this.onDidUpdateEmitter.fire();
     }
 
     public async initialize(): Promise<void> {
-        await this.rebuild();
+        const loaded = await this.loadPersistedIndex();
+
+        if (!loaded) {
+            await this.rebuild();
+        } else {
+            this.onDidUpdateEmitter.fire();
+        }
 
         this.watcher = vscode.workspace.createFileSystemWatcher('**/*.php');
         this.watcher.onDidCreate((uri) => this.scheduleIndexFile(uri));
         this.watcher.onDidChange((uri) => this.scheduleIndexFile(uri));
         this.watcher.onDidDelete((uri) => {
             this.index.removeFile(uri);
+            void this.persistIndex();
             this.onDidUpdateEmitter.fire();
         });
     }
@@ -79,7 +93,10 @@ export class NamespaceCache implements vscode.Disposable {
 
         this.updateTimers.set(key, setTimeout(() => {
             this.updateTimers.delete(key);
-            void this.indexFile(uri).then(() => this.onDidUpdateEmitter.fire());
+            void this.indexFile(uri).then(async () => {
+                await this.persistIndex();
+                this.onDidUpdateEmitter.fire();
+            });
         }, 250));
     }
 
@@ -93,5 +110,75 @@ export class NamespaceCache implements vscode.Disposable {
         } catch {
             this.index.removeFile(uri);
         }
+    }
+
+    private async loadPersistedIndex(): Promise<boolean> {
+        if (this.storageUri === undefined) {
+            return false;
+        }
+
+        try {
+            const indexUri = vscode.Uri.joinPath(
+                this.storageUri,
+                NamespaceCache.indexFileName
+            );
+            const raw = await vscode.workspace.fs.readFile(indexUri);
+            const parsed = JSON.parse(Buffer.from(raw).toString('utf8')) as {
+                version?: number;
+                files?: Record<string, { entries?: Array<{ className?: string; fqcn?: string }> }>;
+            };
+
+            if (parsed.version !== NamespaceCache.indexVersion || parsed.files === undefined) {
+                return false;
+            }
+
+            const entries: CacheEntry[] = [];
+            for (const [uriString, file] of Object.entries(parsed.files)) {
+                const uri = vscode.Uri.parse(uriString);
+
+                for (const entry of file.entries ?? []) {
+                    if (typeof entry.className !== 'string' || typeof entry.fqcn !== 'string') {
+                        continue;
+                    }
+
+                    entries.push({
+                        className: entry.className,
+                        fqcn: entry.fqcn,
+                        uri,
+                    });
+                }
+            }
+
+            this.setEntries(entries);
+
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    private async persistIndex(): Promise<void> {
+        if (this.storageUri === undefined) {
+            return;
+        }
+
+        const files: Record<string, { entries: Array<{ className: string; fqcn: string }> }> = {};
+
+        for (const entry of this.index.toEntries()) {
+            const uri = entry.uri as vscode.Uri;
+            const uriString = uri.toString();
+            files[uriString] ??= { entries: [] };
+            files[uriString].entries.push({
+                className: entry.className,
+                fqcn: entry.fqcn,
+            });
+        }
+
+        const indexUri = vscode.Uri.joinPath(this.storageUri, NamespaceCache.indexFileName);
+        await vscode.workspace.fs.createDirectory(this.storageUri);
+        await vscode.workspace.fs.writeFile(indexUri, Buffer.from(JSON.stringify({
+            version: NamespaceCache.indexVersion,
+            files,
+        }), 'utf8'));
     }
 }
