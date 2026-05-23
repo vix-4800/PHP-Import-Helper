@@ -251,6 +251,13 @@ export function registerCommands(
                 return;
             }
 
+            if (parser.parse(editor.document.getText()).useStatements.some((statement) =>
+                statement.kind === 'class' && statement.fqcn === resolved.fqcn
+            )) {
+                void vscode.window.showInformationMessage(`${resolved.fqcn} is already imported.`);
+                return;
+            }
+
             const alias = await aliasForConflict(editor, parser, resolved.fqcn);
             if (alias === null) {
                 return;
