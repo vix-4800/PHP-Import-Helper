@@ -31,6 +31,6 @@ export class AutoImportOnSave {
             }
         }
 
-        return text;
+        return this.importManager.replaceImportedFullyQualifiedClasses(text);
     }
 }

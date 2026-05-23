@@ -1,15 +1,18 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
-import * as path from 'path';
 import type { DeclarationParser } from '../core/DeclarationParser';
 import { ImportManager } from '../core/ImportManager';
 import type { NamespaceCache } from '../core/NamespaceCache';
-import { applyGeneratedNamespace, generateNamespace } from '../core/NamespaceGenerator';
+import {
+    applyGeneratedNamespace,
+    findNearestComposerPath,
+    generateNamespace,
+} from '../core/NamespaceGenerator';
 import { PhpClassDetector } from '../core/PhpClassDetector';
 import { SortManager } from '../core/SortManager';
 import { UseFoldingRangeCalculator } from '../core/UseFoldingRangeCalculator';
 import { parseAutoload } from '../core/composer';
-import type { CacheEntry } from '../types';
+import type { CacheEntry, ResolvedNamespace } from '../types';
 import { getConfig, leadingSeparator, sortMode } from '../utils/config';
 
 function activePhpEditor(): vscode.TextEditor | null {
@@ -33,6 +36,10 @@ function targetWord(editor: vscode.TextEditor, className?: string): string | nul
     return className ?? selectedWord(editor);
 }
 
+function shortName(fqcn: string): string {
+    return fqcn.split('\\').pop() ?? fqcn;
+}
+
 function sortWhenConfigured(text: string, uri: vscode.Uri, sortManager: SortManager): string {
     if (!getConfig(uri).get<boolean>('autoSort', true)) {
         return text;
@@ -43,6 +50,55 @@ function sortWhenConfigured(text: string, uri: vscode.Uri, sortManager: SortMana
     } catch {
         return text;
     }
+}
+
+async function chooseResolved(
+    className: string,
+    resolved: ResolvedNamespace[]
+): Promise<ResolvedNamespace | null> {
+    if (resolved.length === 0) {
+        void vscode.window.showInformationMessage(`No import found for ${className}.`);
+        return null;
+    }
+
+    if (resolved.length === 1) {
+        return resolved[0];
+    }
+
+    const picked = await vscode.window.showQuickPick(
+        resolved.map((item) => ({
+            label: item.fqcn,
+            description: item.source,
+            resolved: item,
+        })),
+        { placeHolder: `Select import for ${className}` }
+    );
+
+    return picked?.resolved ?? null;
+}
+
+async function aliasForConflict(
+    editor: vscode.TextEditor,
+    parser: DeclarationParser,
+    fqcn: string
+): Promise<string | undefined | null> {
+    const parsed = parser.parse(editor.document.getText());
+    const candidateName = shortName(fqcn);
+    const hasConflict = parsed.useStatements.some((statement) =>
+        statement.kind === 'class' &&
+        statement.className === candidateName &&
+        statement.fqcn !== fqcn
+    );
+
+    if (!hasConflict) {
+        return undefined;
+    }
+
+    return await vscode.window.showInputBox({
+        prompt: `Alias for ${fqcn}`,
+        value: candidateName,
+        validateInput: (value) => value.trim() === '' ? 'Alias is required.' : null,
+    }) ?? null;
 }
 
 async function replaceDocument(editor: vscode.TextEditor, text: string): Promise<void> {
@@ -69,6 +125,25 @@ async function replaceTargetWord(
     }
 
     await editor.edit((edit) => edit.replace(range, replacement));
+}
+
+function resolveTargetRange(editor: vscode.TextEditor, range?: vscode.Range): vscode.Range | undefined {
+    return range ?? editor.document.getWordRangeAtPosition(
+        editor.selection.active,
+        /\\?[A-Za-z_][A-Za-z0-9_\\]*/
+    );
+}
+
+function replaceRangeInText(
+    document: vscode.TextDocument,
+    text: string,
+    range: vscode.Range,
+    replacement: string
+): string {
+    const start = document.offsetAt(range.start);
+    const end = document.offsetAt(range.end);
+
+    return `${text.slice(0, start)}${replacement}${text.slice(end)}`;
 }
 
 export async function foldUsesInEditor(editor: vscode.TextEditor): Promise<void> {
@@ -149,15 +224,18 @@ export function registerCommands(
                 return;
             }
 
-            const resolved = cache.resolve(word);
-            if (resolved.length !== 1) {
+            const resolved = await chooseResolved(word, cache.resolve(word));
+            if (resolved === null) {
                 return;
             }
 
             const prefix = leadingSeparator(editor.document.uri) ? '\\' : '';
-            await replaceTargetWord(editor, `${prefix}${resolved[0].fqcn}`, targetRange);
+            await replaceTargetWord(editor, `${prefix}${resolved.fqcn}`, targetRange);
         }),
-        vscode.commands.registerCommand('phpImportHelper.import', async (className?: string) => {
+        vscode.commands.registerCommand('phpImportHelper.import', async (
+            className?: string,
+            targetRange?: vscode.Range
+        ) => {
             const editor = activePhpEditor();
             if (editor === null) {
                 return;
@@ -168,12 +246,23 @@ export function registerCommands(
                 return;
             }
 
-            const resolved = cache.resolve(word);
-            if (resolved.length !== 1) {
+            const resolved = await chooseResolved(word, cache.resolve(word));
+            if (resolved === null) {
                 return;
             }
 
-            const importedText = importManager.addImport(editor.document.getText(), resolved[0].fqcn);
+            const alias = await aliasForConflict(editor, parser, resolved.fqcn);
+            if (alias === null) {
+                return;
+            }
+
+            const originalText = editor.document.getText();
+            const aliasRange = alias === undefined ? undefined : resolveTargetRange(editor, targetRange);
+            const textWithAlias =
+                alias === undefined || aliasRange === undefined
+                    ? originalText
+                    : replaceRangeInText(editor.document, originalText, aliasRange, alias);
+            const importedText = importManager.addImport(textWithAlias, resolved.fqcn, alias);
             await replaceDocument(editor, sortWhenConfigured(importedText, editor.document.uri, sortManager));
             diagnostics.update(editor.document);
         }),
@@ -223,7 +312,16 @@ export function registerCommands(
                 return;
             }
 
-            const composerPath = path.join(workspaceFolder.uri.fsPath, 'composer.json');
+            const composerPath = await findNearestComposerPath(
+                editor.document.uri.fsPath,
+                workspaceFolder.uri.fsPath,
+                async (candidate) => await fs.access(candidate).then(() => true, () => false)
+            );
+            if (composerPath === null) {
+                void vscode.window.showInformationMessage('No composer.json found.');
+                return;
+            }
+
             const composerText = await fs.readFile(composerPath, 'utf8').catch(() => null);
             if (composerText === null) {
                 return;
