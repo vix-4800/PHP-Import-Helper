@@ -105,4 +105,42 @@ namespace App\\Domain {
             'App\\Domain\\UserRepository',
         ]);
     });
+
+    test('replaces entries for a changed file', () => {
+        const index = new NamespaceIndex();
+        const uri = { fsPath: '/project/app/Domain/User.php' };
+
+        index.replaceFile(uri, [
+            { className: 'User', fqcn: 'App\\Domain\\User', uri },
+        ]);
+        index.replaceFile(uri, [
+            { className: 'Account', fqcn: 'App\\Domain\\Account', uri },
+        ]);
+
+        assert.deepStrictEqual(index.resolve('User'), []);
+        assert.deepStrictEqual(index.resolve('Account').map((item) => item.fqcn), [
+            'App\\Domain\\Account',
+        ]);
+    });
+
+    test('removes entries for a deleted file', () => {
+        const index = new NamespaceIndex();
+        const uri = { fsPath: '/project/app/Domain/User.php' };
+
+        index.setEntries([
+            { className: 'User', fqcn: 'App\\Domain\\User', uri },
+            {
+                className: 'Post',
+                fqcn: 'App\\Domain\\Post',
+                uri: { fsPath: '/project/app/Domain/Post.php' },
+            },
+        ]);
+
+        index.removeFile(uri);
+
+        assert.deepStrictEqual(index.resolve('User'), []);
+        assert.deepStrictEqual(index.resolve('Post').map((item) => item.fqcn), [
+            'App\\Domain\\Post',
+        ]);
+    });
 });
