@@ -154,14 +154,14 @@ export class PhpClassDetector {
     public detectAll(text: string): string[] {
         return unique(
             this.detectReferences(text)
-                .filter((item) => item.importName !== null)
+                .filter((item) => this.isImportCandidate(item))
                 .map((item) => item.name)
         );
     }
 
     public detectAllWithPositions(text: string): DetectedClassReference[] {
         return this.uniqueReferences(
-            this.detectReferences(text).filter((item) => item.importName !== null)
+            this.detectReferences(text).filter((item) => this.isImportCandidate(item))
         );
     }
 
@@ -491,6 +491,10 @@ export class PhpClassDetector {
     private keepImportName(name: string): boolean {
         return !scalarTypes.has(name.toLowerCase()) &&
             (!builtInClasses.has(name) || this.keepBuiltInReference(name));
+    }
+
+    private isImportCandidate(item: DetectedClassReference): boolean {
+        return item.importName !== null && !builtInClasses.has(item.importName);
     }
 
     private uniqueReferences(items: DetectedClassReference[]): DetectedClassReference[] {
