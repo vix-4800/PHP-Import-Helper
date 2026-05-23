@@ -77,4 +77,17 @@ class Foo {
         assert.ok(text.includes('use App\\Models\\User as AppUser;'));
         assert.ok(!text.includes('Post'));
     });
+
+    test('keeps imports used as namespace prefixes', () => {
+        const text = manager.removeUnused(`<?php
+
+use App\\Models\\User;
+
+class Foo {
+    public function profile(): User\\Profile {}
+}
+`);
+
+        assert.ok(text.includes('use App\\Models\\User;'));
+    });
 });

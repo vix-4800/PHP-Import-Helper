@@ -1,6 +1,6 @@
 import type { DeclarationParser } from './DeclarationParser';
 import { getInsertPosition } from './insertPosition';
-import { PhpClassDetector, sanitizePhpCode } from './PhpClassDetector';
+import { PhpClassDetector } from './PhpClassDetector';
 import type { UseStatement } from '../types';
 
 function escapeRegex(value: string): string {
@@ -32,27 +32,32 @@ export class ImportManager {
     }
 
     public replaceImportedFullyQualifiedClasses(text: string): string {
-        let result = text;
-
-        for (const statement of this.parser
+        const imported = new Map(
+            this.parser
             .parse(text)
-            .useStatements.filter((item) => item.kind === 'class')) {
-            const className = statement.className;
-            const fqcn = statement.fqcn;
-            const pattern = new RegExp(`\\\\${escapeRegex(fqcn)}\\b`, 'g');
-            const chars = [...result];
-            const clean = this.maskStringsAndComments(result);
-
-            for (const match of result.matchAll(pattern)) {
-                const index = match.index ?? 0;
-                if (clean.slice(index, index + match[0].length).trim() === '') {
-                    continue;
+                .useStatements.filter((item) => item.kind === 'class')
+                .map((item) => [item.fqcn, item.className])
+        );
+        const replacements = this.detector
+            .detectFullyQualifiedReferences(text)
+            .filter((item) => imported.has(item.rawName))
+            .sort((left, right) => {
+                if (left.line !== right.line) {
+                    return right.line - left.line;
                 }
 
-                chars.splice(index, match[0].length, ...className);
-                result = chars.join('');
-                return this.replaceImportedFullyQualifiedClasses(result);
+                return right.character - left.character;
+            });
+        let result = text;
+
+        for (const reference of replacements) {
+            const alias = imported.get(reference.rawName);
+            if (alias === undefined) {
+                continue;
             }
+
+            const start = this.offsetAt(result, reference.line, reference.character);
+            result = `${result.slice(0, start)}${alias}${result.slice(start + reference.rawName.length + 1)}`;
         }
 
         return result;
@@ -60,7 +65,7 @@ export class ImportManager {
 
     public removeUnused(text: string): string {
         const parsed = this.parser.parse(text);
-        const detected = new Set(this.detector.detectAll(text));
+        const detected = new Set(this.detector.detectImportUsages(text));
         const lines = text.split(/\r?\n/);
         const replacements = new Map<number, { endLine: number; text: string }>();
         const handledRanges = new Set<string>();
@@ -78,7 +83,7 @@ export class ImportManager {
                     item.endLine === statement.endLine &&
                     item.kind === 'class'
             );
-            const kept = siblings.filter((item) => this.isUsed(text, detected, item));
+            const kept = siblings.filter((item) => this.isUsed(detected, item));
 
             if (kept.length === siblings.length) {
                 continue;
@@ -107,20 +112,25 @@ export class ImportManager {
         return result.join('\n').replace(/\n{3,}/g, '\n\n');
     }
 
-    private maskStringsAndComments(text: string): string {
-        return sanitizePhpCode(text);
-    }
-
-    private isUsed(text: string, detected: Set<string>, statement: UseStatement): boolean {
-        return (
-            detected.has(statement.className) ||
-            new RegExp(`\\b${escapeRegex(statement.className)}\\\\[A-Za-z_]`).test(text)
-        );
+    private isUsed(detected: Set<string>, statement: UseStatement): boolean {
+        return detected.has(statement.className);
     }
 
     private renderUse(statement: UseStatement): string {
         const alias = statement.alias === null ? '' : ` as ${statement.alias}`;
 
         return `use ${statement.fqcn}${alias};`;
+    }
+
+    private offsetAt(text: string, line: number, character: number): number {
+        const lines = text.split('\n');
+        let offset = 0;
+
+        for (let index = 0; index < line; index++) {
+            offset += lines[index]?.length ?? 0;
+            offset += 1;
+        }
+
+        return offset + character;
     }
 }

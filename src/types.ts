@@ -35,6 +35,12 @@ export interface DetectedClass {
     character: number;
 }
 
+export interface DetectedClassReference extends DetectedClass {
+    rawName: string;
+    importName: string | null;
+    fullyQualified: boolean;
+}
+
 export interface ResolvedNamespace {
     fqcn: string;
     source: 'global' | 'project' | 'vendor';

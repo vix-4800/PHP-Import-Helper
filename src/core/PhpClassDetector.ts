@@ -1,6 +1,7 @@
 import { builtInClasses } from './builtInClasses';
+import { PhpAstParser, type PhpAstComment, type PhpAstLocation, type PhpAstNode } from './phpParser';
 import { positionAt, unique } from './text';
-import type { DetectedClass } from '../types';
+import type { DetectedClassReference } from '../types';
 
 const scalarTypes = new Set([
     'array',
@@ -29,6 +30,19 @@ function blankRange(chars: string[], start: number, end: number): void {
             chars[index] = ' ';
         }
     }
+}
+
+function shortName(fqcn: string): string {
+    return fqcn.split('\\').pop() ?? fqcn;
+}
+
+function extractTypeNames(typeExpression: string): string[] {
+    return unique(
+        [...typeExpression.matchAll(/\\?([A-Za-z_][A-Za-z0-9_]*)(?:\\[A-Za-z_][A-Za-z0-9_]*)*/g)]
+            .map((match) => match[0].replace(/^\\+/, '').split('\\').pop() ?? '')
+            .filter((name) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
+            .filter((name) => !scalarTypes.has(name.toLowerCase()))
+    );
 }
 
 export function sanitizePhpCode(text: string, options: { preservePhpDoc?: boolean } = {}): string {
@@ -116,23 +130,257 @@ export function sanitizePhpCode(text: string, options: { preservePhpDoc?: boolea
     return chars.join('');
 }
 
-function extractTypeNames(typeExpression: string): string[] {
-    return unique(
-        [...typeExpression.matchAll(/\\?([A-Za-z_][A-Za-z0-9_]*)(?:\\[A-Za-z_][A-Za-z0-9_]*)*/g)]
-            .map((match) => match[0].replace(/^\\+/, '').split('\\').pop() ?? '')
-            .filter((name) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
-            .filter((name) => !scalarTypes.has(name.toLowerCase()))
-    );
-}
-
 export class PhpClassDetector {
+    private readonly parser = new PhpAstParser();
+
     public detectAll(text: string): string[] {
-        return unique(this.detectAllWithPositions(text).map((item) => item.name));
+        return unique(
+            this.detectReferences(text)
+                .filter((item) => item.importName !== null)
+                .map((item) => item.name)
+        );
     }
 
-    public detectAllWithPositions(text: string): DetectedClass[] {
+    public detectAllWithPositions(text: string): DetectedClassReference[] {
+        return this.uniqueReferences(
+            this.detectReferences(text).filter((item) => item.importName !== null)
+        );
+    }
+
+    public detectImportUsages(text: string): string[] {
+        return unique(
+            this.detectReferences(text)
+                .map((item) => item.importName)
+                .filter((item): item is string => item !== null)
+        );
+    }
+
+    public detectFullyQualifiedReferences(text: string): DetectedClassReference[] {
+        return this.uniqueReferences(this.detectReferences(text).filter((item) => item.fullyQualified));
+    }
+
+    public detectReferences(text: string): DetectedClassReference[] {
+        const document = this.parser.parse(text);
+        const found = this.detectAstReferences(document.text);
+
+        if (document.errors.length > 0) {
+            found.push(...this.detectFallbackReferences(text));
+        }
+
+        return this.uniqueReferences(found);
+    }
+
+    private detectAstReferences(text: string): DetectedClassReference[] {
+        const document = this.parser.parse(text);
+        const found: DetectedClassReference[] = [];
+        const processedComments = new Set<number>();
+
+        this.parser.walk(document.program, (node) => {
+            this.addPhpDocComments(found, node.leadingComments, processedComments, text);
+
+            switch (node.kind) {
+                case 'class':
+                case 'interface':
+                case 'trait':
+                case 'enum':
+                    this.addNodeList(found, node.extends);
+                    this.addNodeList(found, node.implements);
+                    this.addAttributeGroups(found, node.attrGroups);
+                    return;
+                case 'traituse':
+                    this.addNodeList(found, node.traits);
+                    return;
+                case 'function':
+                case 'method':
+                case 'closure':
+                case 'arrowfunc':
+                    this.addTypeReference(found, node.type);
+                    this.addAttributeGroups(found, node.attrGroups);
+                    return;
+                case 'parameter':
+                case 'property':
+                case 'classconstant':
+                    this.addTypeReference(found, node.type);
+                    this.addAttributeGroups(found, node.attrGroups);
+                    return;
+                case 'new':
+                case 'staticlookup':
+                    this.addNodeReference(found, node.what);
+                    return;
+                case 'bin':
+                    if (node.type === 'instanceof') {
+                        this.addNodeReference(found, node.right);
+                    }
+                    return;
+                case 'catch':
+                    this.addNodeList(found, node.what);
+                    return;
+                case 'attribute':
+                    if (typeof node.name === 'string') {
+                        this.addRawReference(found, node.name, node.loc);
+                    }
+                    return;
+                default:
+                    return;
+            }
+        });
+
+        return found;
+    }
+
+    private addNodeList(found: DetectedClassReference[], value: unknown): void {
+        if (Array.isArray(value)) {
+            value.forEach((item) => this.addNodeReference(found, item));
+            return;
+        }
+
+        this.addNodeReference(found, value);
+    }
+
+    private addNodeReference(found: DetectedClassReference[], value: unknown): void {
+        if (this.parser.isName(value)) {
+            this.addRawReference(found, value.name, value.loc);
+        }
+    }
+
+    private addTypeReference(found: DetectedClassReference[], value: unknown): void {
+        if (this.parser.isName(value)) {
+            this.addRawReference(found, value.name, value.loc);
+            return;
+        }
+
+        if (
+            typeof value === 'object' &&
+            value !== null &&
+            'kind' in value &&
+            typeof (value as { kind: unknown }).kind === 'string'
+        ) {
+            const node = value as PhpAstNode;
+
+            if (node.kind === 'typereference' && typeof node.name === 'string') {
+                this.addRawReference(found, node.name, node.loc);
+                return;
+            }
+
+            if (
+                (node.kind === 'uniontype' || node.kind === 'intersectiontype') &&
+                Array.isArray(node.types)
+            ) {
+                node.types.forEach((item) => this.addTypeReference(found, item));
+            }
+        }
+    }
+
+    private addAttributeGroups(found: DetectedClassReference[], value: unknown): void {
+        if (!Array.isArray(value)) {
+            return;
+        }
+
+        for (const group of value) {
+            if (
+                typeof group === 'object' &&
+                group !== null &&
+                'attrs' in group &&
+                Array.isArray((group as { attrs?: unknown[] }).attrs)
+            ) {
+                (group as { attrs: unknown[] }).attrs.forEach((item) => {
+                    if (
+                        typeof item === 'object' &&
+                        item !== null &&
+                        'kind' in item &&
+                        (item as { kind: string }).kind === 'attribute'
+                    ) {
+                        const attribute = item as PhpAstNode;
+                        if (typeof attribute.name === 'string') {
+                            this.addRawReference(found, attribute.name, attribute.loc);
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    private addRawReference(
+        found: DetectedClassReference[],
+        rawName: string,
+        loc: PhpAstLocation | undefined
+    ): void {
+        if (loc === undefined) {
+            return;
+        }
+
+        const fullyQualified = rawName.startsWith('\\');
+        const normalized = rawName.replace(/^\\+|\\+$/g, '');
+        if (normalized === '') {
+            return;
+        }
+
+        const importName = fullyQualified ? null : normalized.split('\\')[0] ?? null;
+        const name = importName ?? shortName(normalized);
+        if (importName !== null) {
+            const lower = importName.toLowerCase();
+            if (scalarTypes.has(lower)) {
+                return;
+            }
+
+            if (builtInClasses.has(importName) && !this.keepBuiltInReference(importName)) {
+                return;
+            }
+        }
+
+        found.push({
+            name,
+            rawName: normalized,
+            importName,
+            fullyQualified,
+            line: loc.start.line - 1,
+            character: loc.start.column,
+        });
+    }
+
+    private addPhpDocComments(
+        found: DetectedClassReference[],
+        comments: PhpAstComment[] | undefined,
+        processedComments: Set<number>,
+        text: string
+    ): void {
+        for (const comment of comments ?? []) {
+            const offset = comment.offset ?? comment.loc?.start.offset;
+            if (offset === undefined || processedComments.has(offset) || comment.kind !== 'commentblock') {
+                continue;
+            }
+
+            processedComments.add(offset);
+            for (const lineMatch of comment.value.matchAll(
+                /^\s*\*\s*@(param|return|var|throws|property(?:-read|-write)?|mixin|extends|implements|method|see|template)\s+(.+)$/gm
+            )) {
+                const tag = lineMatch[1];
+                const body = lineMatch[2];
+                const expression =
+                    tag === 'template' ? body.replace(/^[A-Za-z_][A-Za-z0-9_]*\s+of\s+/, '') : body;
+
+                for (const name of extractTypeNames(expression)) {
+                    if (/^T[A-Z]/.test(name) && !expression.includes(`of ${name}`)) {
+                        continue;
+                    }
+
+                    const index = lineMatch.index ?? 0;
+                    const nameOffset = offset + comment.value.indexOf(name, index);
+                    found.push({
+                        name,
+                        rawName: name,
+                        importName: this.keepImportName(name) ? name : null,
+                        fullyQualified: false,
+                        ...positionAt(text, nameOffset),
+                    });
+                }
+            }
+        }
+    }
+
+    private detectFallbackReferences(text: string): DetectedClassReference[] {
         const sanitized = sanitizePhpCode(text, { preservePhpDoc: true });
-        const found: DetectedClass[] = [];
+        const found: DetectedClassReference[] = [];
 
         const addMatches = (source: string, pattern: RegExp, group = 1): void => {
             for (const match of source.matchAll(pattern)) {
@@ -145,18 +393,19 @@ export class PhpClassDetector {
                 const baseOffset = (match.index ?? 0) + match[0].indexOf(value);
 
                 for (const name of names) {
-                    if (
-                        builtInClasses.has(name) &&
-                        !/JsonSerializable|Stringable|Countable|Iterator|RuntimeException|DomainException/.test(
-                            name
-                        )
-                    ) {
+                    if (!this.keepImportName(name)) {
                         continue;
                     }
 
                     const offset = source.indexOf(name, baseOffset);
                     const pos = positionAt(text, offset === -1 ? baseOffset : offset);
-                    found.push({ name, ...pos });
+                    found.push({
+                        name,
+                        rawName: name,
+                        importName: name,
+                        fullyQualified: false,
+                        ...pos,
+                    });
                 }
             }
         };
@@ -185,7 +434,6 @@ export class PhpClassDetector {
         addMatches(sanitized, /\binstanceof\s+(\\?[A-Za-z_][A-Za-z0-9_\\]*)/g);
         addMatches(sanitized, /\bcatch\s*\(([^)$]+)(?:\$[A-Za-z_][A-Za-z0-9_]*)?\)/g);
         addMatches(sanitized, /#\[(.*?)\]/gs);
-        addMatches(sanitized, /^\s*use\s+([^;{]+)[;{]/gm);
 
         for (const block of text.matchAll(/\/\*\*[\s\S]*?\*\//g)) {
             const phpDoc = block[0];
@@ -205,24 +453,40 @@ export class PhpClassDetector {
                     }
 
                     const nameOffset = offset + phpDoc.indexOf(name, lineMatch.index ?? 0);
-                    found.push({ name, ...positionAt(text, nameOffset) });
+                    found.push({
+                        name,
+                        rawName: name,
+                        importName: this.keepImportName(name) ? name : null,
+                        fullyQualified: false,
+                        ...positionAt(text, nameOffset),
+                    });
                 }
             }
         }
 
-        const filtered = found.filter((item) => {
-            const line = text.split(/\r?\n/)[item.line] ?? '';
+        return found;
+    }
 
-            return !/^(?:namespace|use\s)/.test(line);
-        });
+    private keepBuiltInReference(name: string): boolean {
+        return /JsonSerializable|Stringable|Countable|Iterator|RuntimeException|DomainException/.test(
+            name
+        );
+    }
 
+    private keepImportName(name: string): boolean {
+        return !scalarTypes.has(name.toLowerCase()) &&
+            (!builtInClasses.has(name) || this.keepBuiltInReference(name));
+    }
+
+    private uniqueReferences(items: DetectedClassReference[]): DetectedClassReference[] {
         const seen = new Set<string>();
 
-        return filtered.filter((item) => {
-            const key = `${item.name}:${item.line}:${item.character}`;
+        return items.filter((item) => {
+            const key = `${item.name}:${item.rawName}:${item.line}:${item.character}:${item.fullyQualified}`;
             if (seen.has(key)) {
                 return false;
             }
+
             seen.add(key);
             return true;
         });

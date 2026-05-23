@@ -1,58 +1,45 @@
+import { DeclarationParser } from './DeclarationParser';
+
 export interface UseFoldingRange {
     startLine: number;
     endLine: number;
 }
 
 export class UseFoldingRangeCalculator {
+    public constructor(private readonly parser = new DeclarationParser()) {}
+
     public calculate(lines: string[]): UseFoldingRange[] {
+        const blocks = [...new Map(
+            this.parser
+                .parse(lines.join('\n'))
+                .useStatements.map((statement) => [
+                    `${statement.line}:${statement.endLine}`,
+                    { startLine: statement.line - 1, endLine: statement.endLine - 1 },
+                ])
+        ).values()].sort((left, right) => left.startLine - right.startLine);
         const ranges: UseFoldingRange[] = [];
-        let index = 0;
-        let beforeDeclaration = true;
+        let current: UseFoldingRange | null = null;
 
-        while (index < lines.length) {
-            const line = lines[index];
-
-            if (/^\s*(?:class|interface|trait|enum)\b/.test(line)) {
-                beforeDeclaration = false;
-            }
-
-            if (beforeDeclaration && /^\s*use\s+/.test(line)) {
-                const start = index;
-                let end = index;
-
-                while (index < lines.length) {
-                    if (/^\s*use\s+/.test(lines[index])) {
-                        end = index;
-
-                        if (!lines[index].includes(';')) {
-                            while (index + 1 < lines.length && !lines[index].includes(';')) {
-                                index++;
-                                end = index;
-                            }
-                        }
-
-                        index++;
-                        continue;
-                    }
-
-                    if (lines[index].trim() === '') {
-                        const next = lines[index + 1] ?? '';
-                        if (/^\s*use\s+/.test(next)) {
-                            index++;
-                            continue;
-                        }
-                    }
-
-                    break;
-                }
-
-                if (end > start) {
-                    ranges.push({ startLine: start, endLine: end });
-                }
+        for (const block of blocks) {
+            if (current === null) {
+                current = { ...block };
                 continue;
             }
 
-            index++;
+            if (block.startLine <= current.endLine + 2) {
+                current.endLine = Math.max(current.endLine, block.endLine);
+                continue;
+            }
+
+            if (current.endLine > current.startLine) {
+                ranges.push(current);
+            }
+
+            current = { ...block };
+        }
+
+        if (current !== null && current.endLine > current.startLine) {
+            ranges.push(current);
         }
 
         return ranges;
