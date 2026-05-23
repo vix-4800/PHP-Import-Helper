@@ -31,6 +31,18 @@ final class Controller {}
         ]);
     });
 
+    test('parses php tag line with leading whitespace', () => {
+        const result = parser.parse(`
+
+<?php
+
+namespace App;
+`);
+
+        assert.strictEqual(result.declarationLines.phpTag, 3);
+        assert.strictEqual(result.declarationLines.namespace, 5);
+    });
+
     test('parses grouped imports with aliases and nested names', () => {
         const result = parser.parse(`<?php
 

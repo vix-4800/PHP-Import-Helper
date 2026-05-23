@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { PhpClassDetector, sanitizePhpCode } from '../../core/PhpClassDetector';
+import { PhpAstParser } from '../../core/phpParser';
 
 suite('PhpClassDetector', () => {
     const detector = new PhpClassDetector();
@@ -35,6 +36,17 @@ function show($request) {}
         assert.ok(result.includes('Collection'));
         assert.ok(result.includes('User'));
         assert.ok(!result.includes('Logger'));
+    });
+
+    test('detects standalone PHPDoc tags not attached to AST nodes', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @var StandaloneType $value
+ */
+$value = make();
+`);
+
+        assert.deepStrictEqual(result, ['StandaloneType']);
     });
 
     test('detects traits, catch types, static calls, and constructors', () => {
@@ -134,5 +146,24 @@ $real = new Service();
 `);
 
         assert.deepStrictEqual(result, ['Service']);
+    });
+
+    test('parses document once per detection pass', () => {
+        class CountingParser extends PhpAstParser {
+            public count = 0;
+
+            public override parse(code: string, filename?: string) {
+                this.count++;
+
+                return super.parse(code, filename);
+            }
+        }
+
+        const parser = new CountingParser();
+        const countingDetector = new PhpClassDetector(parser);
+
+        countingDetector.detectAll('<?php class Foo extends Controller {}');
+
+        assert.strictEqual(parser.count, 1);
     });
 });
