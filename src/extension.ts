@@ -6,7 +6,7 @@ import { PhpClassDetector } from './core/PhpClassDetector';
 import { SortManager } from './core/SortManager';
 import { AutoImportOnSave } from './features/AutoImportOnSave';
 import { PhpCodeActionProvider } from './features/CodeActionProvider';
-import { registerCommands } from './features/commands';
+import { foldUsesInEditor, registerCommands } from './features/commands';
 import { DiagnosticManager } from './features/DiagnosticManager';
 import { UseFoldingRangeProvider } from './features/UseFoldingRangeProvider';
 import { getConfig, sortMode } from './utils/config';
@@ -19,6 +19,16 @@ export function activate(context: vscode.ExtensionContext): void {
     const importManager = new ImportManager(parser);
     const sortManager = new SortManager(parser);
     const autoImport = new AutoImportOnSave(detector, parser, cache);
+    const autoFoldUses = async (editor: vscode.TextEditor | undefined): Promise<void> => {
+        if (
+            editor?.document.languageId !== 'php' ||
+            !getConfig(editor.document.uri).get<boolean>('autoFoldUses', false)
+        ) {
+            return;
+        }
+
+        await foldUsesInEditor(editor);
+    };
 
     context.subscriptions.push(
         diagnostics,
@@ -33,7 +43,13 @@ export function activate(context: vscode.ExtensionContext): void {
             { language: 'php' },
             new UseFoldingRangeProvider()
         ),
-        vscode.workspace.onDidOpenTextDocument((document) => diagnostics.update(document)),
+        vscode.workspace.onDidOpenTextDocument((document) => {
+            diagnostics.update(document);
+            void autoFoldUses(vscode.window.activeTextEditor);
+        }),
+        vscode.window.onDidChangeActiveTextEditor((editor) => {
+            void autoFoldUses(editor);
+        }),
         vscode.workspace.onDidChangeTextDocument((event) => diagnostics.update(event.document)),
         vscode.workspace.onDidCloseTextDocument((document) => diagnostics.clear(document.uri)),
         vscode.workspace.onWillSaveTextDocument((event) => {
