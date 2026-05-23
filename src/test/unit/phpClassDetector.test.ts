@@ -38,6 +38,36 @@ function show($request) {}
         assert.ok(!result.includes('Logger'));
     });
 
+    test('detects rich PHPDoc tag type expressions', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @property-read Profile $profile
+ * @method Collection<User> users(Request $request)
+ * @mixin QueryBuilder
+ * @extends Repository<User>
+ * @implements Handler<Request>
+ * @see RelatedClass
+ */
+class UserRepository {}
+`);
+
+        for (const name of ['Profile', 'Collection', 'User', 'Request', 'QueryBuilder', 'Repository', 'Handler', 'RelatedClass']) {
+            assert.ok(result.includes(name), `${name} missing`);
+        }
+    });
+
+    test('ignores PHPDoc free-text code patterns and variable names', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * Example: new HiddenService() and Cache::get() in docs.
+ * @var VisibleService $service
+ */
+$service = make();
+`);
+
+        assert.deepStrictEqual(result, ['VisibleService']);
+    });
+
     test('detects standalone PHPDoc tags not attached to AST nodes', () => {
         const result = detector.detectAll(`<?php
 /**
@@ -137,6 +167,32 @@ class Foo {
         }
     });
 
+    test('detects multiple attributes in one attribute group', () => {
+        const result = detector.detectAll(`<?php
+
+#[FirstAttribute, SecondAttribute(options: new AttributeOption())]
+class Foo {}
+`);
+
+        for (const name of ['FirstAttribute', 'SecondAttribute', 'AttributeOption']) {
+            assert.ok(result.includes(name), `${name} missing`);
+        }
+    });
+
+    test('detects PHP 8.4 asymmetric visibility property types and property hook params', () => {
+        const result = detector.detectAll(`<?php
+
+class Foo {
+    public private(set) PropertyValue $value {
+        set(HookValue $value) => $this->value = $value;
+    }
+}
+`);
+
+        assert.ok(result.includes('PropertyValue'));
+        assert.ok(result.includes('HookValue'));
+    });
+
     test('does not detect variable static access or anonymous class expressions', () => {
         const result = detector.detectAll(`<?php
 
@@ -146,6 +202,23 @@ $real = new Service();
 `);
 
         assert.deepStrictEqual(result, ['Service']);
+    });
+
+    test('does not import classes referenced only by fully qualified names', () => {
+        const text = `<?php
+
+class Foo {
+    public function run(): \\App\\Services\\Runner {
+        return new \\App\\Services\\Runner();
+    }
+}
+`;
+
+        assert.deepStrictEqual(detector.detectAll(text), []);
+        assert.deepStrictEqual(detector.detectFullyQualifiedReferences(text).map((item) => item.rawName), [
+            'App\\Services\\Runner',
+            'App\\Services\\Runner',
+        ]);
     });
 
     test('parses document once per detection pass', () => {

@@ -27,4 +27,36 @@ suite('UseFoldingRangeCalculator', () => {
             '}',
         ]), []);
     });
+
+    test('folds separate import groups independently', () => {
+        assert.deepStrictEqual(calculator.calculate([
+            '<?php',
+            '',
+            'use App\\Models\\User;',
+            'use App\\Models\\Post;',
+            '',
+            'use function App\\Support\\helper;',
+            'use function App\\Support\\other;',
+            '',
+            'class Foo {}',
+        ]), [
+            { startLine: 2, endLine: 3 },
+            { startLine: 5, endLine: 6 },
+        ]);
+    });
+
+    test('folds multiline grouped imports by declaration range', () => {
+        assert.deepStrictEqual(calculator.calculate([
+            '<?php',
+            '',
+            'use App\\Models\\{',
+            '    User,',
+            '    Post,',
+            '};',
+            '',
+            'class Foo {}',
+        ]), [
+            { startLine: 2, endLine: 5 },
+        ]);
+    });
 });

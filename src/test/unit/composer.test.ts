@@ -38,4 +38,45 @@ suite('composer autoload', () => {
 
         assert.strictEqual(resolveNamespace('/project/lib/Legacy/Util', autoload), 'Legacy\\Util');
     });
+
+    test('parses array paths and strips trailing slashes', () => {
+        const autoload = parseAutoload({
+            autoload: {
+                'psr-4': {
+                    'App\\': ['app/', 'src/App//'],
+                },
+            },
+        });
+
+        assert.deepStrictEqual(autoload.psr4, [
+            { namespace: 'App', paths: ['app', 'src/App'] },
+        ]);
+    });
+
+    test('prefers psr-4 over psr-0 when both match', () => {
+        const autoload = parseAutoload({
+            autoload: {
+                'psr-4': { 'App\\': 'app/' },
+                'psr-0': { 'Legacy\\': 'app/' },
+            },
+        });
+
+        assert.strictEqual(resolveNamespace('/project/app/Models', autoload), 'App\\Models');
+    });
+
+    test('resolves Laravel-style app directory', () => {
+        const autoload = parseAutoload({
+            autoload: { 'psr-4': { 'App\\': 'app/' } },
+        });
+
+        assert.strictEqual(resolveNamespace('/project/app', autoload), 'App');
+    });
+
+    test('returns null for unmatched paths', () => {
+        const autoload = parseAutoload({
+            autoload: { 'psr-4': { 'App\\': 'app/' } },
+        });
+
+        assert.strictEqual(resolveNamespace('/project/database/migrations', autoload), null);
+    });
 });

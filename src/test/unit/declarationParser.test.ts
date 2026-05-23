@@ -43,6 +43,21 @@ namespace App;
         assert.strictEqual(result.declarationLines.namespace, 5);
     });
 
+    test('parses inline php namespace syntax with leading whitespace', () => {
+        const result = parser.parse(`
+  <?php namespace App\\Inline;
+
+use App\\Models\\User;
+
+class Foo {}
+`);
+
+        assert.strictEqual(result.namespace, 'App\\Inline');
+        assert.strictEqual(result.declarationLines.phpTag, 2);
+        assert.strictEqual(result.declarationLines.namespace, 2);
+        assert.deepStrictEqual(result.useStatements.map((statement) => statement.className), ['User']);
+    });
+
     test('parses grouped imports with aliases and nested names', () => {
         const result = parser.parse(`<?php
 
@@ -139,5 +154,18 @@ use App\\Models\\{User, Post};
 
 class Foo {}
 `, 'App\\Models\\User'), /already imported/);
+    });
+
+    test('ignores namespace imports that appear after first class declaration', () => {
+        const result = parser.parse(`<?php
+
+use App\\Models\\User;
+
+class Foo {}
+
+use App\\Models\\Post;
+`);
+
+        assert.deepStrictEqual(result.useStatements.map((statement) => statement.className), ['User']);
     });
 });

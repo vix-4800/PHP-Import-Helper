@@ -16,6 +16,17 @@ class Foo {}
         assert.ok(text.includes("namespace App;\n\nuse App\\Models\\User;\n\nclass Foo"));
     });
 
+    test('inserts import with alias', () => {
+        const text = manager.addImport(`<?php
+
+namespace App;
+
+class Foo {}
+`, 'Vendor\\Package\\Client', 'VendorClient');
+
+        assert.ok(text.includes('use Vendor\\Package\\Client as VendorClient;'));
+    });
+
     test('does not duplicate existing import and replaces FQCN with alias', () => {
         const text = manager.replaceImportedFullyQualifiedClasses(`<?php
 
@@ -31,6 +42,29 @@ class Foo {
 
         assert.ok(text.includes('cl::FORMAT_JSON'));
         assert.ok(text.includes('"\\yii\\httpclient\\Client::FORMAT_JSON"'));
+    });
+
+    test('replaces FQCN constructors but not PHPDoc comments or heredoc content', () => {
+        const text = manager.replaceImportedFullyQualifiedClasses(`<?php
+
+use App\\Services\\Client;
+
+class Foo {
+    /**
+     * @var \\App\\Services\\Client
+     */
+    public function run(): void {
+        $client = new \\App\\Services\\Client();
+        $sql = <<<SQL
+new \\App\\Services\\Client()
+SQL;
+    }
+}
+`);
+
+        assert.ok(text.includes('new Client();'));
+        assert.ok(text.includes('@var \\App\\Services\\Client'));
+        assert.ok(text.includes('new \\App\\Services\\Client()'));
     });
 
     test('removes unused imports while keeping PHPDoc-only usages', () => {
@@ -89,5 +123,52 @@ class Foo {
 `);
 
         assert.ok(text.includes('use App\\Models\\User;'));
+    });
+
+    test('keeps lowercase alias used through static access and new expression', () => {
+        const text = manager.removeUnused(`<?php
+
+use yii\\httpclient\\Client as cl;
+use App\\Models\\Post;
+
+class Foo {
+    public function run(): void {
+        cl::create();
+        new cl();
+    }
+}
+`);
+
+        assert.ok(text.includes('use yii\\httpclient\\Client as cl;'));
+        assert.ok(!text.includes('use App\\Models\\Post;'));
+    });
+
+    test('keeps imported traits used inside a class body', () => {
+        const text = manager.removeUnused(`<?php
+
+use App\\Traits\\HasFactory;
+use App\\Models\\Post;
+
+class Foo {
+    use HasFactory;
+}
+`);
+
+        assert.ok(text.includes('use App\\Traits\\HasFactory;'));
+        assert.ok(!text.includes('use App\\Models\\Post;'));
+    });
+
+    test('cleans blank lines after removing all unused imports', () => {
+        const text = manager.removeUnused(`<?php
+
+use App\\Models\\User;
+use App\\Models\\Post;
+
+
+class Foo {}
+`);
+
+        assert.ok(!text.includes('use App\\Models\\User;'));
+        assert.ok(!text.includes('\n\n\nclass Foo'));
     });
 });
