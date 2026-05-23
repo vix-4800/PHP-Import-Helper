@@ -15,7 +15,7 @@ class Foo extends Controller implements JsonSerializable {
 
         const names = result.map((item) => item.name);
         assert.ok(names.includes('Controller'));
-        assert.ok(names.includes('JsonSerializable'));
+        assert.ok(!names.includes('JsonSerializable'));
         assert.ok(names.includes('CurrentUser'));
         assert.ok(names.includes('User'));
         assert.ok(names.includes('Response'));
@@ -95,9 +95,11 @@ class Foo {
 }
 `);
 
-        for (const name of ['HasFactory', 'SoftDeletes', 'Client', 'Cache', 'RuntimeException', 'DomainException']) {
+        for (const name of ['HasFactory', 'SoftDeletes', 'Client', 'Cache']) {
             assert.ok(result.includes(name), `${name} missing`);
         }
+        assert.ok(!result.includes('RuntimeException'));
+        assert.ok(!result.includes('DomainException'));
     });
 
     test('sanitizes strings and comments while preserving attributes and length', () => {
@@ -156,15 +158,25 @@ class Foo {
         for (const name of [
             'ErrorCode',
             'Status',
-            'Iterator',
-            'Countable',
             'Collection',
-            'Stringable',
-            'InvalidArgumentException',
-            'LogicException',
         ]) {
             assert.ok(result.includes(name), `${name} missing`);
         }
+        for (const name of ['Iterator', 'Countable', 'Stringable', 'InvalidArgumentException', 'LogicException']) {
+            assert.ok(!result.includes(name), `${name} should be filtered`);
+        }
+    });
+
+    test('keeps built-in references as import usages but not import candidates', () => {
+        const text = `<?php
+
+class Foo implements JsonSerializable {
+    public function run(): RuntimeException {}
+}
+`;
+
+        assert.deepStrictEqual(detector.detectAll(text), []);
+        assert.deepStrictEqual(detector.detectImportUsages(text), ['JsonSerializable', 'RuntimeException']);
     });
 
     test('detects multiple attributes in one attribute group', () => {
