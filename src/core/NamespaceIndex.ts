@@ -42,6 +42,27 @@ export class NamespaceIndex {
         }
     }
 
+    public replaceFile(uri: { fsPath: string }, entries: IndexedEntry[]): void {
+        this.removeFile(uri);
+
+        for (const entry of entries) {
+            this.add(entry);
+        }
+    }
+
+    public removeFile(uri: { fsPath: string }): void {
+        for (const [className, entries] of this.entries) {
+            const remaining = entries.filter((entry) => entry.uri.fsPath !== uri.fsPath);
+
+            if (remaining.length === 0) {
+                this.entries.delete(className);
+                continue;
+            }
+
+            this.entries.set(className, remaining);
+        }
+    }
+
     public add(entry: IndexedEntry): void {
         const list = this.entries.get(entry.className) ?? [];
         list.push(entry);

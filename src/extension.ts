@@ -29,8 +29,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
         await foldUsesInEditor(editor);
     };
+    const refreshVisibleDiagnostics = (): void => {
+        for (const document of vscode.workspace.textDocuments) {
+            diagnostics.update(document);
+        }
+    };
 
     context.subscriptions.push(
+        cache,
+        cache.onDidUpdate(refreshVisibleDiagnostics),
         diagnostics,
         vscode.languages.registerCodeActionsProvider(
             { language: 'php' },
@@ -87,6 +94,7 @@ export function activate(context: vscode.ExtensionContext): void {
     );
 
     registerCommands(context, parser, cache, diagnostics);
+    void cache.initialize();
 
     for (const document of vscode.workspace.textDocuments) {
         diagnostics.update(document);
