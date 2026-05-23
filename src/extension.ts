@@ -14,7 +14,7 @@ import { getConfig, sortMode } from './utils/config';
 export function activate(context: vscode.ExtensionContext): void {
     const parser = new DeclarationParser();
     const detector = new PhpClassDetector();
-    const cache = new NamespaceCache();
+    const cache = new NamespaceCache(context.storageUri);
     const diagnostics = new DiagnosticManager(detector, parser, cache);
     const importManager = new ImportManager(parser);
     const sortManager = new SortManager(parser);
