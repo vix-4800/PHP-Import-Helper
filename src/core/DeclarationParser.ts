@@ -19,6 +19,16 @@ function shortName(fqcn: string): string {
     return fqcn.split('\\').pop() ?? fqcn;
 }
 
+function phpTagLine(text: string): number {
+    const index = text.indexOf('<?php');
+
+    if (index === -1) {
+        return 0;
+    }
+
+    return text.slice(0, index).split(/\r?\n/).length;
+}
+
 export class DeclarationParser {
     public constructor(private readonly phpParser = new PhpAstParser()) {}
 
@@ -27,7 +37,7 @@ export class DeclarationParser {
         const namespaceNode = this.phpParser.getNamespace(document);
         const topLevelStatements = this.phpParser.getTopLevelStatements(document);
         const declarationLines: DeclarationLines = {
-            phpTag: text.includes('<?php') ? 1 : 0,
+            phpTag: phpTagLine(text),
             declare: null,
             namespace: namespaceNode?.loc?.start.line ?? null,
             firstUseStatement: null,

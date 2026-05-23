@@ -1,5 +1,11 @@
 import { builtInClasses } from './builtInClasses';
-import { PhpAstParser, type PhpAstComment, type PhpAstLocation, type PhpAstNode } from './phpParser';
+import {
+    PhpAstParser,
+    type PhpAstComment,
+    type PhpAstDocument,
+    type PhpAstLocation,
+    type PhpAstNode,
+} from './phpParser';
 import { positionAt, unique } from './text';
 import type { DetectedClassReference } from '../types';
 
@@ -43,6 +49,18 @@ function extractTypeNames(typeExpression: string): string[] {
             .filter((name) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
             .filter((name) => !scalarTypes.has(name.toLowerCase()))
     );
+}
+
+function phpDocTypeExpression(tag: string, body: string): string {
+    if (tag === 'template') {
+        return body.replace(/^[A-Za-z_][A-Za-z0-9_]*\s+of\s+/, '');
+    }
+
+    if (tag === 'param' || tag === 'var' || tag.startsWith('property')) {
+        return body.replace(/\s+\$[A-Za-z_][A-Za-z0-9_]*.*$/, '');
+    }
+
+    return body;
 }
 
 export function sanitizePhpCode(text: string, options: { preservePhpDoc?: boolean } = {}): string {
@@ -131,7 +149,7 @@ export function sanitizePhpCode(text: string, options: { preservePhpDoc?: boolea
 }
 
 export class PhpClassDetector {
-    private readonly parser = new PhpAstParser();
+    public constructor(private readonly parser = new PhpAstParser()) {}
 
     public detectAll(text: string): string[] {
         return unique(
@@ -161,7 +179,7 @@ export class PhpClassDetector {
 
     public detectReferences(text: string): DetectedClassReference[] {
         const document = this.parser.parse(text);
-        const found = this.detectAstReferences(document.text);
+        const found = this.detectAstReferences(document);
 
         if (document.errors.length > 0) {
             found.push(...this.detectFallbackReferences(text));
@@ -170,13 +188,12 @@ export class PhpClassDetector {
         return this.uniqueReferences(found);
     }
 
-    private detectAstReferences(text: string): DetectedClassReference[] {
-        const document = this.parser.parse(text);
+    private detectAstReferences(document: PhpAstDocument): DetectedClassReference[] {
         const found: DetectedClassReference[] = [];
         const processedComments = new Set<number>();
 
         this.parser.walk(document.program, (node) => {
-            this.addPhpDocComments(found, node.leadingComments, processedComments, text);
+            this.addPhpDocComments(found, node.leadingComments, processedComments, document.text);
 
             switch (node.kind) {
                 case 'class':
@@ -356,8 +373,7 @@ export class PhpClassDetector {
             )) {
                 const tag = lineMatch[1];
                 const body = lineMatch[2];
-                const expression =
-                    tag === 'template' ? body.replace(/^[A-Za-z_][A-Za-z0-9_]*\s+of\s+/, '') : body;
+                const expression = phpDocTypeExpression(tag, body);
 
                 for (const name of extractTypeNames(expression)) {
                     if (/^T[A-Z]/.test(name) && !expression.includes(`of ${name}`)) {
@@ -444,8 +460,7 @@ export class PhpClassDetector {
             )) {
                 const tag = lineMatch[1];
                 const body = lineMatch[2];
-                const expression =
-                    tag === 'template' ? body.replace(/^[A-Za-z_][A-Za-z0-9_]*\s+of\s+/, '') : body;
+                const expression = phpDocTypeExpression(tag, body);
 
                 for (const name of extractTypeNames(expression)) {
                     if (/^T[A-Z]/.test(name) && !expression.includes(`of ${name}`)) {
