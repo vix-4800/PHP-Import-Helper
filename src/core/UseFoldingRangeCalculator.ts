@@ -26,7 +26,7 @@ export class UseFoldingRangeCalculator {
                 continue;
             }
 
-            if (block.startLine <= current.endLine + 2) {
+            if (block.startLine <= current.endLine + 1) {
                 current.endLine = Math.max(current.endLine, block.endLine);
                 continue;
             }
