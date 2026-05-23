@@ -23,13 +23,13 @@
 - [x] Add `DeclarationParser` fallback for parse errors.
 - [x] Verify/remove risky `php-parser` `php7: true` option.
 - [x] Expand PHP 8.4 coverage: property hooks and asymmetric visibility.
-- [ ] Make built-in class policy consistent between detector and diagnostics.
+- [x] Make built-in class policy consistent between detector and diagnostics.
 
 ## Generate Namespace
 
 - [x] Find nearest `composer.json` upward from current file.
 - [x] Cover nested composer package paths.
-- [ ] Add integration tests for insert and replace behaviour.
+- [x] Add integration tests for insert and replace behaviour.
 
 ## Diagnostics
 
@@ -41,12 +41,12 @@
 
 ## Save Hooks
 
-- [ ] Verify save hook order: autoImport -> removeUnused -> sort.
+- [x] Verify save hook order: autoImport -> removeUnused -> sort.
 - [x] Replace imported FQCNs during auto-import-on-save.
-- [ ] Add integration coverage for save hooks.
+- [x] Add integration coverage for save hooks.
 
 ## Docs And Release
 
-- [ ] Sync README with final behaviour.
+- [x] Sync README with final behaviour.
 - [ ] Finalize package metadata and marketplace assets.
 - [ ] Verify full CI on GitHub Actions.
