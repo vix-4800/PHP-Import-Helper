@@ -332,17 +332,11 @@ export class PhpClassDetector {
             return;
         }
 
-        const importName = fullyQualified ? null : normalized.split('\\')[0] ?? null;
-        const name = importName ?? shortName(normalized);
-        if (importName !== null) {
-            const lower = importName.toLowerCase();
-            if (scalarTypes.has(lower)) {
-                return;
-            }
-
-            if (builtInClasses.has(importName) && !this.keepBuiltInReference(importName)) {
-                return;
-            }
+        const rawImportName = fullyQualified ? null : normalized.split('\\')[0] ?? null;
+        const name = rawImportName ?? shortName(normalized);
+        const importName = rawImportName === null ? null : this.getImportUsageName(rawImportName);
+        if (rawImportName !== null && importName === null) {
+            return;
         }
 
         found.push({
@@ -382,10 +376,11 @@ export class PhpClassDetector {
 
                     const index = lineMatch.index ?? 0;
                     const nameOffset = offset + comment.value.indexOf(name, index);
+                    const importName = this.getImportUsageName(name);
                     found.push({
                         name,
                         rawName: name,
-                        importName: this.keepImportName(name) ? name : null,
+                        importName,
                         fullyQualified: false,
                         ...positionAt(text, nameOffset),
                     });
@@ -409,7 +404,8 @@ export class PhpClassDetector {
                 const baseOffset = (match.index ?? 0) + match[0].indexOf(value);
 
                 for (const name of names) {
-                    if (!this.keepImportName(name)) {
+                    const importName = this.getImportUsageName(name);
+                    if (importName === null) {
                         continue;
                     }
 
@@ -418,7 +414,7 @@ export class PhpClassDetector {
                     found.push({
                         name,
                         rawName: name,
-                        importName: name,
+                        importName,
                         fullyQualified: false,
                         ...pos,
                     });
@@ -468,10 +464,11 @@ export class PhpClassDetector {
                     }
 
                     const nameOffset = offset + phpDoc.indexOf(name, lineMatch.index ?? 0);
+                    const importName = this.getImportUsageName(name);
                     found.push({
                         name,
                         rawName: name,
-                        importName: this.keepImportName(name) ? name : null,
+                        importName,
                         fullyQualified: false,
                         ...positionAt(text, nameOffset),
                     });
@@ -482,15 +479,8 @@ export class PhpClassDetector {
         return found;
     }
 
-    private keepBuiltInReference(name: string): boolean {
-        return /JsonSerializable|Stringable|Countable|Iterator|RuntimeException|DomainException/.test(
-            name
-        );
-    }
-
-    private keepImportName(name: string): boolean {
-        return !scalarTypes.has(name.toLowerCase()) &&
-            (!builtInClasses.has(name) || this.keepBuiltInReference(name));
+    private getImportUsageName(name: string): string | null {
+        return scalarTypes.has(name.toLowerCase()) ? null : name;
     }
 
     private isImportCandidate(item: DetectedClassReference): boolean {
