@@ -5,6 +5,14 @@ export function testWorkspaceRoot(): vscode.Uri {
     return vscode.Uri.file(process.cwd());
 }
 
+function testRunId(): string {
+    return process.env.VSCODE_TEST_RUN_ID ?? 'default';
+}
+
+export function testFixtureRoot(): vscode.Uri {
+    return vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures', testRunId());
+}
+
 export async function ensureTestWorkspace(): Promise<void> {
     if (vscode.workspace.getWorkspaceFolder(testWorkspaceRoot()) !== undefined) {
         return;
@@ -33,7 +41,7 @@ export function getText(editor: vscode.TextEditor): string {
 
 export async function openWorkspaceFile(relativePath: string, content: string): Promise<vscode.TextEditor> {
     await ensureTestWorkspace();
-    const uri = vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures', relativePath);
+    const uri = vscode.Uri.joinPath(testFixtureRoot(), relativePath);
     await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(uri.fsPath)));
     await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf8'));
     const document = await vscode.workspace.openTextDocument(uri);
