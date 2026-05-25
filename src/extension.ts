@@ -8,8 +8,9 @@ import { AutoImportOnSave } from './features/AutoImportOnSave';
 import { PhpCodeActionProvider } from './features/CodeActionProvider';
 import { foldUsesInEditor, registerCommands } from './features/commands';
 import { DiagnosticManager } from './features/DiagnosticManager';
+import { computeSaveHookText } from './features/saveHooks';
 import { UseFoldingRangeProvider } from './features/UseFoldingRangeProvider';
-import { getConfig, sortMode } from './utils/config';
+import { getConfig, ignoredClasses, sortMode } from './utils/config';
 
 export function activate(context: vscode.ExtensionContext): void {
     const parser = new DeclarationParser();
@@ -64,29 +65,24 @@ export function activate(context: vscode.ExtensionContext): void {
                 return;
             }
 
-            let text = event.document.getText();
+            const originalText = event.document.getText();
             const config = getConfig(event.document.uri);
+            const text = computeSaveHookText(originalText, {
+                autoImportOnSave: config.get<boolean>('autoImportOnSave', false),
+                removeOnSave: config.get<boolean>('removeOnSave', false),
+                sortOnSave: config.get<boolean>('sortOnSave', false),
+                sortMode: sortMode(event.document.uri),
+                ignoredClasses: ignoredClasses(event.document.uri),
+            }, {
+                autoImportText: (value) => autoImport.computeTextForText(value),
+                removeUnusedText: (value, ignored) => importManager.removeUnused(value, ignored),
+                sortText: (value, mode) => sortManager.sortText(value, mode),
+            });
 
-            if (config.get<boolean>('autoImportOnSave', false)) {
-                text = autoImport.computeText(event.document);
-            }
-
-            if (config.get<boolean>('removeOnSave', false)) {
-                text = importManager.removeUnused(text);
-            }
-
-            if (config.get<boolean>('sortOnSave', false)) {
-                try {
-                    text = sortManager.sortText(text, sortMode(event.document.uri));
-                } catch {
-                    return;
-                }
-            }
-
-            if (text !== event.document.getText()) {
+            if (text !== originalText) {
                 const range = new vscode.Range(
                     event.document.positionAt(0),
-                    event.document.positionAt(event.document.getText().length)
+                    event.document.positionAt(originalText.length)
                 );
                 event.waitUntil(Promise.resolve([vscode.TextEdit.replace(range, text)]));
             }
