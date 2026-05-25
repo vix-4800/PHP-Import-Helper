@@ -72,6 +72,17 @@ suite('composer autoload', () => {
         assert.strictEqual(resolveNamespace('/project/app', autoload), 'App');
     });
 
+    test('resolves namespace from Windows absolute composer path', () => {
+        const autoload = parseAutoload({
+            autoload: { 'psr-4': { 'Package\\': 'C:\\workspace\\packages\\blog\\src\\' } },
+        });
+
+        assert.strictEqual(
+            resolveNamespace('C:\\workspace\\packages\\blog\\src\\Http', autoload),
+            'Package\\Http',
+        );
+    });
+
     test('returns null for unmatched paths', () => {
         const autoload = parseAutoload({
             autoload: { 'psr-4': { 'App\\': 'app/' } },

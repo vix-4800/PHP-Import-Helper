@@ -1,10 +1,15 @@
 import * as assert from 'assert';
+import * as path from 'path';
 import {
     applyGeneratedNamespace,
     findNearestComposerPath,
     generateNamespace,
 } from '../../core/NamespaceGenerator';
 import { parseAutoload } from '../../core/composer';
+
+function absolutePath(...segments: string[]): string {
+    return path.join(path.parse(process.cwd()).root, ...segments);
+}
 
 suite('generateNamespace', () => {
     test('generates namespace from psr-4 composer mapping', () => {
@@ -22,9 +27,11 @@ suite('generateNamespace', () => {
         const autoload = parseAutoload({
             autoload: { 'psr-4': { 'Package\\': 'src/' } },
         });
+        const composerDirectory = absolutePath('workspace', 'packages', 'blog');
+        const filePath = path.join(composerDirectory, 'src', 'Http', 'Controller.php');
 
         assert.strictEqual(
-            generateNamespace('/workspace/packages/blog/src/Http/Controller.php', autoload, '/workspace/packages/blog'),
+            generateNamespace(filePath, autoload, composerDirectory),
             'Package\\Http',
         );
     });
@@ -67,29 +74,32 @@ class Foo {}
 
     test('finds nearest composer json walking upward to workspace root', async () => {
         const checked: string[] = [];
+        const workspaceRoot = absolutePath('project');
+        const composerPath = path.join(workspaceRoot, 'packages', 'blog', 'composer.json');
         const result = await findNearestComposerPath(
-            '/project/packages/blog/src/Controller/PostController.php',
-            '/project',
+            path.join(workspaceRoot, 'packages', 'blog', 'src', 'Controller', 'PostController.php'),
+            workspaceRoot,
             async (candidate) => {
                 checked.push(candidate);
 
-                return candidate === '/project/packages/blog/composer.json';
+                return candidate === composerPath;
             }
         );
 
-        assert.strictEqual(result, '/project/packages/blog/composer.json');
+        assert.strictEqual(result, composerPath);
         assert.deepStrictEqual(checked, [
-            '/project/packages/blog/src/Controller/composer.json',
-            '/project/packages/blog/src/composer.json',
-            '/project/packages/blog/composer.json',
+            path.join(workspaceRoot, 'packages', 'blog', 'src', 'Controller', 'composer.json'),
+            path.join(workspaceRoot, 'packages', 'blog', 'src', 'composer.json'),
+            composerPath,
         ]);
     });
 
     test('does not search above workspace root for composer json', async () => {
         const checked: string[] = [];
+        const workspaceRoot = absolutePath('project', 'packages');
         const result = await findNearestComposerPath(
-            '/project/packages/blog/src/Post.php',
-            '/project/packages',
+            path.join(workspaceRoot, 'blog', 'src', 'Post.php'),
+            workspaceRoot,
             async (candidate) => {
                 checked.push(candidate);
 
@@ -98,6 +108,6 @@ class Foo {}
         );
 
         assert.strictEqual(result, null);
-        assert.ok(!checked.includes('/project/composer.json'));
+        assert.ok(!checked.includes(absolutePath('project', 'composer.json')));
     });
 });
