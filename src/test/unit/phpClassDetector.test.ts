@@ -283,6 +283,21 @@ class Foo implements JsonSerializable {
         assert.deepStrictEqual(detector.detectImportUsages(text), ['JsonSerializable', 'RuntimeException']);
     });
 
+    test('keeps PHPDoc built-in exceptions as import usages but not import candidates', () => {
+        const text = `<?php
+
+class Foo {
+    /**
+     * @throws JsonException
+     */
+    public function run(): void {}
+}
+`;
+
+        assert.deepStrictEqual(detector.detectAll(text), []);
+        assert.deepStrictEqual(detector.detectImportUsages(text), ['JsonException']);
+    });
+
     test('keeps imported built-ins as import usages in PHPDoc and runtime code', () => {
         const text = `<?php
 

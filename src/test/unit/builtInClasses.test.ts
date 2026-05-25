@@ -3,7 +3,22 @@ import { builtInClasses } from '../../core/builtInClasses';
 
 suite('builtInClasses', () => {
     test('contains PHP core and modern built-ins but not user-space framework classes', () => {
-        for (const className of ['stdClass', 'Exception', 'DateTime', 'PDO', 'WeakMap', 'Fiber', 'BackedEnum', 'Override']) {
+        for (const className of [
+            'stdClass',
+            'Exception',
+            'DateTime',
+            'PDO',
+            'WeakMap',
+            'Fiber',
+            'BackedEnum',
+            'Override',
+            'JsonException',
+            'Error',
+            'TypeError',
+            'ValueError',
+            'DateMalformedStringException',
+            'SplObjectStorage',
+        ]) {
             assert.ok(builtInClasses.has(className), className);
         }
 
