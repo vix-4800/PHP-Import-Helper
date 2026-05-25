@@ -23,15 +23,21 @@ function activePhpEditor(): vscode.TextEditor | null {
     return editor?.document.languageId === 'php' ? editor : null;
 }
 
-function wordRangeAtSelection(editor: vscode.TextEditor): vscode.Range | undefined {
+function wordRangeAtPosition(
+    editor: vscode.TextEditor,
+    position: vscode.Position
+): vscode.Range | undefined {
     return editor.document.getWordRangeAtPosition(
-        editor.selection.active,
+        position,
         /\\?[A-Za-z_][A-Za-z0-9_\\]*/
     );
 }
 
-function selectedTarget(editor: vscode.TextEditor): { target: ClassTarget; range?: vscode.Range } | null {
-    const range = wordRangeAtSelection(editor);
+function selectedTargetForSelection(
+    editor: vscode.TextEditor,
+    selection: vscode.Selection
+): { target: ClassTarget; range: vscode.Range } | null {
+    const range = wordRangeAtPosition(editor, selection.active);
 
     if (range === undefined) {
         return null;
@@ -53,7 +59,7 @@ function commandTarget(
         return target === null ? null : { target, range };
     }
 
-    return selectedTarget(editor);
+    return selectedTargetForSelection(editor, editor.selection);
 }
 
 function selectedWord(editor: vscode.TextEditor): string | null {
@@ -310,9 +316,37 @@ export function registerCommands(
             }
 
             if (className === undefined && targetRange === undefined && editor.selections.length > 1) {
+                const replacements: Array<{ range: vscode.Range; text: string }> = [];
+
                 for (const selection of editor.selections) {
-                    editor.selection = selection;
-                    await vscode.commands.executeCommand('phpImportHelper.expand');
+                    const target = selectedTargetForSelection(editor, selection);
+                    if (target === null) {
+                        continue;
+                    }
+
+                    const resolved = await resolveTarget(resolver, target.target, editor.document.uri);
+                    if (resolved === null) {
+                        continue;
+                    }
+
+                    const prefix = leadingSeparator(editor.document.uri) ? '\\' : '';
+                    replacements.push({
+                        range: target.range,
+                        text: `${prefix}${resolved.fqcn}`,
+                    });
+                }
+
+                replacements.sort((left, right) =>
+                    editor.document.offsetAt(right.range.start) -
+                    editor.document.offsetAt(left.range.start)
+                );
+                await editor.edit((edit) => {
+                    for (const replacement of replacements) {
+                        edit.replace(replacement.range, replacement.text);
+                    }
+                });
+                if (replacements.length > 0) {
+                    diagnostics.update(editor.document);
                 }
                 return;
             }
