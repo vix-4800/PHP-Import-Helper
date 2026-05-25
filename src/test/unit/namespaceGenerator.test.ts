@@ -18,6 +18,17 @@ suite('generateNamespace', () => {
         );
     });
 
+    test('resolves relative composer paths from composer directory', () => {
+        const autoload = parseAutoload({
+            autoload: { 'psr-4': { 'Package\\': 'src/' } },
+        });
+
+        assert.strictEqual(
+            generateNamespace('/workspace/packages/blog/src/Http/Controller.php', autoload, '/workspace/packages/blog'),
+            'Package\\Http',
+        );
+    });
+
     test('returns null when path is not covered by composer autoload', () => {
         const autoload = parseAutoload({
             autoload: { 'psr-4': { 'App\\': 'app/' } },
