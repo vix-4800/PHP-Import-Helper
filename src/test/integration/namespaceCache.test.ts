@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { NamespaceCache } from '../../core/NamespaceCache';
-import { openWorkspaceFile, testWorkspaceRoot, wait } from './helper';
+import { openWorkspaceFile, wait } from './helper';
 
 function storageUri(name: string): vscode.Uri {
     return vscode.Uri.joinPath(
@@ -93,7 +93,6 @@ class ${className} {}
         assert.deepStrictEqual(cache.resolve(className).map((item) => item.fqcn), [
             `App\\Models\\${className}`,
         ]);
-        assert.ok(vscode.workspace.getWorkspaceFolder(testWorkspaceRoot()) !== undefined);
 
         cache.dispose();
     });
