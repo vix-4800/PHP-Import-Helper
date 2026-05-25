@@ -63,6 +63,43 @@ function commandTarget(
     return selectedTargetForSelection(editor, editor.selection);
 }
 
+function normalizeCommandArgs(
+    firstArg?: unknown,
+    secondArg?: unknown,
+    thirdArg?: unknown
+): { className?: string; range?: vscode.Range } {
+    if (typeof firstArg === 'string') {
+        return {
+            className: firstArg,
+            range: secondArg instanceof vscode.Range ? secondArg : undefined,
+        };
+    }
+
+    if (firstArg instanceof vscode.Uri) {
+        return {
+            className: typeof secondArg === 'string' ? secondArg : undefined,
+            range:
+                secondArg instanceof vscode.Range
+                    ? secondArg
+                    : thirdArg instanceof vscode.Range
+                        ? thirdArg
+                        : undefined,
+        };
+    }
+
+    return {
+        className: typeof secondArg === 'string' ? secondArg : undefined,
+        range:
+            firstArg instanceof vscode.Range
+                ? firstArg
+                : secondArg instanceof vscode.Range
+                    ? secondArg
+                    : thirdArg instanceof vscode.Range
+                        ? thirdArg
+                        : undefined,
+    };
+}
+
 function selectedWord(editor: vscode.TextEditor): string | null {
     const range = editor.document.getWordRangeAtPosition(
         editor.selection.active,
@@ -308,13 +345,20 @@ export function registerCommands(
             diagnostics.update(editor.document);
         }),
         vscode.commands.registerCommand('phpImportHelper.expand', async (
-            className?: string,
-            targetRange?: vscode.Range
+            firstArg?: unknown,
+            secondArg?: unknown,
+            thirdArg?: unknown
         ) => {
             const editor = activePhpEditor();
             if (editor === null) {
                 return;
             }
+
+            const { className, range: targetRange } = normalizeCommandArgs(
+                firstArg,
+                secondArg,
+                thirdArg
+            );
 
             if (className === undefined && targetRange === undefined && editor.selections.length > 1) {
                 const replacements: Array<{ range: vscode.Range; text: string }> = [];
@@ -366,13 +410,20 @@ export function registerCommands(
             await replaceTargetWord(editor, `${prefix}${resolved.fqcn}`, target.range);
         }),
         vscode.commands.registerCommand('phpImportHelper.import', async (
-            className?: string,
-            targetRange?: vscode.Range
+            firstArg?: unknown,
+            secondArg?: unknown,
+            thirdArg?: unknown
         ) => {
             const editor = activePhpEditor();
             if (editor === null) {
                 return;
             }
+
+            const { className, range: targetRange } = normalizeCommandArgs(
+                firstArg,
+                secondArg,
+                thirdArg
+            );
 
             if (className === undefined && targetRange === undefined && editor.selections.length > 1) {
                 for (const selection of editor.selections) {
