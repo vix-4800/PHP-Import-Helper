@@ -59,6 +59,39 @@ function normalizePath(filePath: string): string {
     return filePath.replace(/\\/g, '/').replace(/\/+$/, '');
 }
 
+function findMatchingBase(
+    filePath: string,
+    mappingPath: string
+): { index: number; length: number } | null {
+    const normalizedFilePath = normalizePath(filePath);
+    const normalizedMappingPath = normalizePath(mappingPath);
+    const candidates = [...new Set([
+        normalizedMappingPath,
+        normalizedMappingPath.replace(/^\/+/, ''),
+        `/${normalizedMappingPath.replace(/^\/+/, '')}`,
+    ])];
+
+    for (const candidate of candidates) {
+        let index = normalizedFilePath.indexOf(candidate);
+
+        while (index !== -1) {
+            const beforeOk = index === 0 || normalizedFilePath[index - 1] === '/';
+            const afterIndex = index + candidate.length;
+            const afterOk =
+                afterIndex === normalizedFilePath.length ||
+                normalizedFilePath[afterIndex] === '/';
+
+            if (beforeOk && afterOk) {
+                return { index, length: candidate.length };
+            }
+
+            index = normalizedFilePath.indexOf(candidate, index + 1);
+        }
+    }
+
+    return null;
+}
+
 function resolveFromMappings(
     filePath: string,
     mappings: AutoloadMapping[],
@@ -68,14 +101,15 @@ function resolveFromMappings(
 
     for (const mapping of mappings) {
         for (const path of mapping.paths) {
-            const base = `/${normalizePath(path).replace(/^\/+/, '')}`;
-            const index = normalized.indexOf(base);
+            const matchedBase = findMatchingBase(normalized, path);
 
-            if (index === -1) {
+            if (matchedBase === null) {
                 continue;
             }
 
-            const remaining = normalized.slice(index + base.length).replace(/^\/+/, '');
+            const remaining = normalized
+                .slice(matchedBase.index + matchedBase.length)
+                .replace(/^\/+/, '');
             const suffix = remaining === '' ? '' : `\\${remaining.replace(/\//g, '\\')}`;
             const remainingNamespace = remaining.replace(/\//g, '\\');
             const namespace =
