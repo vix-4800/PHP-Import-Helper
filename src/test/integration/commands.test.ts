@@ -264,6 +264,26 @@ class Foo {
         assert.ok(text.includes('@throws NotFoundHttpException if the model cannot be found'));
     });
 
+    test('import all imports fully qualified PHPDoc types inside shapes and generics', async () => {
+        const editor = await openPhpEditor(`<?php
+
+class Foo {
+    /**
+     * @return array{response: \\yii\\web\\Response, errors?: list<\\yii\\web\\NotFoundHttpException>}
+     */
+    public function run() {}
+}
+`);
+
+        await vscode.commands.executeCommand('phpImportHelper.importAll');
+        await wait();
+
+        const text = getText(editor);
+        assert.ok(text.includes('use yii\\web\\NotFoundHttpException;'));
+        assert.ok(text.includes('use yii\\web\\Response;'));
+        assert.ok(text.includes('@return array{response: Response, errors?: list<NotFoundHttpException>}'));
+    });
+
     test('generate namespace inserts namespace from nearest composer json', async () => {
         await vscode.workspace.fs.createDirectory(
             testFixtureRoot()

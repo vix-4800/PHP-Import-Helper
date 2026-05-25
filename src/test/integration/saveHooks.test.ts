@@ -116,6 +116,37 @@ class Controller {
         }
     });
 
+    test('auto import on save imports fully qualified PHPDoc types inside shapes and generics', async () => {
+        const config = vscode.workspace.getConfiguration('phpImportHelper');
+        const previousAutoImport = config.get<boolean>('autoImportOnSave', false);
+
+        try {
+            await config.update('autoImportOnSave', true, vscode.ConfigurationTarget.Global);
+
+            const editor = await openWorkspaceFile('save-hooks/DocblockComplexFqcn.php', `<?php
+
+class Controller {
+    /**
+     * @return array{response: \\yii\\web\\Response, errors?: list<\\yii\\web\\NotFoundHttpException>}
+     */
+    public function run() {}
+}
+`);
+
+            await editor.edit((edit) => edit.insert(new vscode.Position(0, 0), '\n'));
+            await editor.document.save();
+            await wait(300);
+
+            const text = getText(editor);
+
+            assert.ok(text.includes('use yii\\web\\NotFoundHttpException;'));
+            assert.ok(text.includes('use yii\\web\\Response;'));
+            assert.ok(text.includes('@return array{response: Response, errors?: list<NotFoundHttpException>}'));
+        } finally {
+            await config.update('autoImportOnSave', previousAutoImport, vscode.ConfigurationTarget.Global);
+        }
+    });
+
     test('auto import on save skips same-namespace classes', async () => {
         const config = vscode.workspace.getConfiguration('phpImportHelper');
         const previousAutoImport = config.get<boolean>('autoImportOnSave', false);

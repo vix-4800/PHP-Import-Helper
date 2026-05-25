@@ -185,6 +185,46 @@ class Foo {
         assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotUsed, 'ImportedDocType'));
     });
 
+    test('does not report PHPDoc utility types or shape keys as missing imports', async () => {
+        const diagnostics = await diagnosticsFor(`<?php
+
+class Foo {
+    /**
+     * @param class-string<FooType> $class
+     * @param list<ListItem> $items
+     * @param array-key $key
+     * @param value-of<StatusEnum> $status
+     * @param key-of<ShapeType> $shapeKey
+     * @param array{foo: FooValue, bar?: BarValue, nested: array{baz: BazValue}} $shape
+     * @return $this|parent
+     */
+    public function hydrate($class, $items, $key, $status, $shapeKey, array $shape) {}
+}
+`);
+
+        for (const name of ['FooType', 'ListItem', 'StatusEnum', 'ShapeType', 'FooValue', 'BarValue', 'BazValue']) {
+            assert.ok(hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, name), name);
+        }
+        for (const name of ['class', 'list', 'array', 'key', 'value', 'of', 'foo', 'bar', 'nested', 'baz', 'this', 'parent']) {
+            assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, name), name);
+        }
+    });
+
+    test('keeps imported PHPDoc namespace prefixes and does not report suffixes', async () => {
+        const diagnostics = await diagnosticsFor(`<?php
+
+use App\\Models\\User;
+
+class Foo {
+    /** @return User\\Profile */
+    public function profile() {}
+}
+`);
+
+        assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotUsed, 'User'));
+        assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'Profile'));
+    });
+
     test('ignores free-text descriptions after PHPDoc return and throws types', async () => {
         const diagnostics = await diagnosticsFor(`<?php
 
