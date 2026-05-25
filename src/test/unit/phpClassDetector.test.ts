@@ -252,6 +252,31 @@ class Foo {
         assert.ok(result.includes('HookValue'));
     });
 
+    test('ignores method declaration names and params while fallback syntax is active', () => {
+        const result = detector.detectAll(`<?php
+
+namespace CRM;
+
+abstract class StripChatParent extends CRMSelenium
+{
+    protected function banner(bool $useClickAccept = false)
+    {
+    }
+
+    public function broken(): void
+    {
+        $driver = new LegacyDriver;
+    }
+}
+`);
+
+        assert.ok(result.includes('CRMSelenium'));
+        assert.ok(result.includes('LegacyDriver'));
+        assert.ok(!result.includes('function'));
+        assert.ok(!result.includes('banner'));
+        assert.ok(!result.includes('useClickAccept'));
+    });
+
     test('does not detect variable static access or anonymous class expressions', () => {
         const result = detector.detectAll(`<?php
 

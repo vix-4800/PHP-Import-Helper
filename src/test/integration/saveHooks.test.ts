@@ -115,4 +115,35 @@ class Controller {
             await config.update('autoImportOnSave', previousAutoImport, vscode.ConfigurationTarget.Global);
         }
     });
+
+    test('auto import on save skips same-namespace classes', async () => {
+        const config = vscode.workspace.getConfiguration('phpImportHelper');
+        const previousAutoImport = config.get<boolean>('autoImportOnSave', false);
+
+        try {
+            await config.update('autoImportOnSave', true, vscode.ConfigurationTarget.Global);
+            await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
+                {
+                    className: 'CRMSelenium',
+                    fqcn: 'CRM\\CRMSelenium',
+                    uri: vscode.Uri.file('/project/CRM/CRMSelenium.php'),
+                },
+            ]);
+
+            const editor = await openWorkspaceFile('save-hooks/SameNamespace.php', `<?php
+
+namespace CRM;
+
+abstract class StripChatParent extends CRMSelenium {}
+`);
+
+            await editor.edit((edit) => edit.insert(new vscode.Position(0, 0), '\n'));
+            await editor.document.save();
+            await wait(300);
+
+            assert.ok(!getText(editor).includes('use CRM\\CRMSelenium;'));
+        } finally {
+            await config.update('autoImportOnSave', previousAutoImport, vscode.ConfigurationTarget.Global);
+        }
+    });
 });

@@ -225,6 +225,23 @@ class Foo extends Request {}
         assert.ok(!getText(editor).includes('use Vendor\\Http\\Request;'));
     });
 
+    test('import all skips same-namespace classes', async () => {
+        const editor = await openPhpEditor(`<?php
+
+namespace CRM;
+
+abstract class StripChatParent extends CRMSelenium {}
+`);
+
+        await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
+            { className: 'CRMSelenium', fqcn: 'CRM\\CRMSelenium', uri: editor.document.uri },
+        ]);
+        await vscode.commands.executeCommand('phpImportHelper.importAll');
+        await wait();
+
+        assert.ok(!getText(editor).includes('use CRM\\CRMSelenium;'));
+    });
+
     test('import all imports fully qualified PHPDoc types', async () => {
         const editor = await openPhpEditor(`<?php
 

@@ -262,6 +262,39 @@ class Foo {
         assert.ok(hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'HookValue'));
     });
 
+    test('does not report same-namespace classes or method tokens during parser fallback', async () => {
+        const document = await createPhpDocument(`<?php
+
+namespace CRM;
+
+abstract class StripChatParent extends CRMSelenium
+{
+    protected function banner(bool $useClickAccept = false)
+    {
+    }
+
+    public function broken(): void
+    {
+        $driver = new LegacyDriver;
+    }
+}
+`);
+
+        await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
+            { className: 'CRMSelenium', fqcn: 'CRM\\CRMSelenium', uri: document.uri },
+        ]);
+        await vscode.commands.executeCommand('phpImportHelper.refreshDiagnostics', document.uri);
+        await wait();
+
+        const diagnostics = vscode.languages.getDiagnostics(document.uri);
+
+        assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'CRMSelenium'));
+        assert.ok(hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'LegacyDriver'));
+        for (const name of ['function', 'banner', 'useClickAccept']) {
+            assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, name), name);
+        }
+    });
+
     test('does not report same-namespace class when cache has multiple entries', async () => {
         const document = await createPhpDocument(`<?php
 

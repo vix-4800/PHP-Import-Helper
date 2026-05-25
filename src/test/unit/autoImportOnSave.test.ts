@@ -58,6 +58,22 @@ class Foo {
         assert.ok(!text.includes('use Vendor\\Http\\Request;'));
     });
 
+    test('does not import same-namespace classes on save', () => {
+        const cache = cacheWith({
+            CRMSelenium: [{ fqcn: 'CRM\\CRMSelenium', source: 'project' }],
+        });
+        const autoImport = new AutoImportOnSave(detector, parser, cache);
+
+        const text = autoImport.computeText(documentWithText(`<?php
+
+namespace CRM;
+
+abstract class StripChatParent extends CRMSelenium {}
+`));
+
+        assert.ok(!text.includes('use CRM\\CRMSelenium;'));
+    });
+
     test('does not duplicate already imported classes', () => {
         const cache = cacheWith({
             Request: [{ fqcn: 'App\\Http\\Request', source: 'project' }],
