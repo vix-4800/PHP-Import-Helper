@@ -209,6 +209,22 @@ class Foo {
         assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotUsed, 'NotFoundHttpException'));
     });
 
+    test('does not report fully qualified PHPDoc return types as missing imports', async () => {
+        const diagnostics = await diagnosticsFor(`<?php
+
+class Foo {
+    /**
+     * @return string|\\yii\\web\\Response
+     */
+    public function actionCreate() {
+        return $this->redirect(['view']);
+    }
+}
+`);
+
+        assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'Response'));
+    });
+
     test('does not report same-namespace class when cache has multiple entries', async () => {
         const document = await createPhpDocument(`<?php
 
