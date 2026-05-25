@@ -4,8 +4,16 @@
   "description": "Import, expand, sort, diagnose, and manage PHP namespaces",
   "version": "0.0.1",
   "publisher": "vix",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "qna": false,
+  "preview": true,
+  "pricing": "Free",
   "author": {
     "name": "Anton VIX",
+    "email": "Gordan.ei@protonmail.ch",
     "url": "https://github.com/vix-4800"
   },
   "license": "MIT",
@@ -215,6 +223,7 @@
       }
     ]
   },
+  "homepage": "https://github.com/vix-4800/PHP-Import-Helper",
   "repository": {
     "type": "git",
     "url": "https://github.com/vix-4800/PHP-Import-Helper.git"
