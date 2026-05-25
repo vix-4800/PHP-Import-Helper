@@ -130,4 +130,23 @@ class Foo {
         assert.ok(text.includes('@return string|Response'));
         assert.ok(text.includes('@throws NotFoundHttpException if the model cannot be found'));
     });
+
+    test('imports fully qualified PHPDoc types inside shapes and generics on save', () => {
+        const cache = cacheWith({});
+        const autoImport = new AutoImportOnSave(detector, parser, cache);
+
+        const text = autoImport.computeText(documentWithText(`<?php
+
+class Foo {
+    /**
+     * @return array{response: \\yii\\web\\Response, errors?: list<\\yii\\web\\NotFoundHttpException>}
+     */
+    public function run() {}
+}
+`));
+
+        assert.ok(text.includes('use yii\\web\\NotFoundHttpException;'));
+        assert.ok(text.includes('use yii\\web\\Response;'));
+        assert.ok(text.includes('@return array{response: Response, errors?: list<NotFoundHttpException>}'));
+    });
 });

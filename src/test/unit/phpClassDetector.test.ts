@@ -67,6 +67,55 @@ class UserRepository {}
         assert.deepStrictEqual(result, ['Collection', 'User', 'Request']);
     });
 
+    test('ignores PHPDoc generic utility names while detecting generic class references', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @param class-string<Foo> $class
+ * @param list<Bar> $items
+ * @param array-key $key
+ * @param value-of<Status> $status
+ * @param key-of<Shape> $shapeKey
+ */
+function hydrate($class, $items, $key, $status, $shapeKey): void {}
+`);
+
+        assert.deepStrictEqual(result, ['Foo', 'Bar', 'Status', 'Shape']);
+    });
+
+    test('ignores PHPDoc array shape keys while detecting value types', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @param array{foo: Foo, bar?: Bar, nested: array{baz: Baz}, 0: NumericSlot} $data
+ */
+function hydrate(array $data): void {}
+`);
+
+        assert.deepStrictEqual(result, ['Foo', 'Bar', 'Baz', 'NumericSlot']);
+    });
+
+    test('detects PHPDoc callable argument and return types', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @param callable(Foo): Bar $factory
+ * @param Closure(Baz): Qux $closure
+ */
+function hydrate(callable $factory, Closure $closure): void {}
+`);
+
+        assert.deepStrictEqual(result, ['Foo', 'Bar', 'Baz', 'Qux']);
+    });
+
+    test('ignores PHPDoc pseudo self references', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @return $this|self|static|parent
+ */
+function fluent() {}
+`);
+
+        assert.deepStrictEqual(result, []);
+    });
+
     test('ignores free-text descriptions after PHPDoc return and throws types', () => {
         const result = detector.detectAll(`<?php
 /**
@@ -89,6 +138,21 @@ $service = make();
 `);
 
         assert.deepStrictEqual(result, ['VisibleService']);
+    });
+
+    test('keeps namespace-prefixed PHPDoc references as import usages', () => {
+        const text = `<?php
+
+use App\\Models\\User;
+
+class Foo {
+    /** @return User\\Profile */
+    public function profile() {}
+}
+`;
+
+        assert.deepStrictEqual(detector.detectAll(text), []);
+        assert.deepStrictEqual(detector.detectImportUsages(text), ['User']);
     });
 
     test('detects standalone PHPDoc tags not attached to AST nodes', () => {

@@ -27,7 +27,7 @@ class Foo {}
         assert.ok(text.includes('use Vendor\\Package\\Client as VendorClient;'));
     });
 
-    test('does not duplicate existing import and replaces FQCN with alias', () => {
+    test('replaces FQCN with imported alias', () => {
         const text = manager.replaceImportedFullyQualifiedClasses(`<?php
 
 use yii\\httpclient\\Client as cl;
@@ -63,8 +63,25 @@ SQL;
 `);
 
         assert.ok(text.includes('new Client();'));
-    assert.ok(text.includes('@var Client'));
+        assert.ok(text.includes('@var Client'));
         assert.ok(text.includes('new \\App\\Services\\Client()'));
+    });
+
+    test('replaces FQCN PHPDoc types inside shapes and generics', () => {
+        const text = manager.replaceImportedFullyQualifiedClasses(`<?php
+
+use yii\\web\\NotFoundHttpException;
+use yii\\web\\Response;
+
+class Foo {
+    /**
+     * @return array{response: \\yii\\web\\Response, errors?: list<\\yii\\web\\NotFoundHttpException>}
+     */
+    public function run() {}
+}
+`);
+
+        assert.ok(text.includes('@return array{response: Response, errors?: list<NotFoundHttpException>}'));
     });
 
     test('removes unused imports while keeping PHPDoc-only usages', () => {
@@ -96,6 +113,22 @@ class Foo {
 `);
 
         assert.ok(text.includes('use App\\Models\\User as AppUser;'));
+        assert.ok(!text.includes('use App\\Models\\Post;'));
+    });
+
+    test('keeps imports used as PHPDoc namespace prefixes', () => {
+        const text = manager.removeUnused(`<?php
+
+use App\\Models\\User;
+use App\\Models\\Post;
+
+class Foo {
+    /** @return User\\Profile */
+    public function profile() {}
+}
+`);
+
+        assert.ok(text.includes('use App\\Models\\User;'));
         assert.ok(!text.includes('use App\\Models\\Post;'));
     });
 
