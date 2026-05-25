@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { getText, openPhpEditor, openWorkspaceFile, testWorkspaceRoot, wait } from './helper';
+import { getText, openPhpEditor, openWorkspaceFile, testFixtureRoot, wait } from './helper';
 
 suite('commands', () => {
     test('sort command sorts imports in active PHP editor', async () => {
@@ -191,17 +191,17 @@ class Foo extends Request {}
 
     test('generate namespace inserts namespace from nearest composer json', async () => {
         await vscode.workspace.fs.createDirectory(
-            vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures')
+            testFixtureRoot()
         );
         await vscode.workspace.fs.writeFile(
-            vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures', 'composer.json'),
+            vscode.Uri.joinPath(testFixtureRoot(), 'composer.json'),
             Buffer.from(JSON.stringify({ autoload: { 'psr-4': { 'Root\\': 'root/' } } }), 'utf8')
         );
         await vscode.workspace.fs.createDirectory(
-            vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures', 'package')
+            vscode.Uri.joinPath(testFixtureRoot(), 'package')
         );
         await vscode.workspace.fs.writeFile(
-            vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures', 'package', 'composer.json'),
+            vscode.Uri.joinPath(testFixtureRoot(), 'package', 'composer.json'),
             Buffer.from(JSON.stringify({ autoload: { 'psr-4': { 'Package\\': 'src/' } } }), 'utf8')
         );
         const editor = await openWorkspaceFile('package/src/Http/Controller.php', `<?php
@@ -218,10 +218,10 @@ class Controller {}
 
     test('generate namespace replaces existing namespace', async () => {
         await vscode.workspace.fs.createDirectory(
-            vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures', 'replace')
+            vscode.Uri.joinPath(testFixtureRoot(), 'replace')
         );
         await vscode.workspace.fs.writeFile(
-            vscode.Uri.joinPath(testWorkspaceRoot(), '.vscode-test', 'fixtures', 'replace', 'composer.json'),
+            vscode.Uri.joinPath(testFixtureRoot(), 'replace', 'composer.json'),
             Buffer.from(JSON.stringify({ autoload: { 'psr-4': { 'App\\': 'src/' } } }), 'utf8')
         );
         const editor = await openWorkspaceFile('replace/src/Model/User.php', `<?php

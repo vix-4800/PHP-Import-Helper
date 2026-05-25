@@ -26,7 +26,7 @@ suite('diagnostics and code actions', () => {
 
 use App\\Models\\Post;
 
-class Foo extends Controller {}
+class Foo extends DiagnosticMissingController {}
 `);
 
         await vscode.commands.executeCommand('phpImportHelper.refreshDiagnostics', document.uri);
@@ -34,7 +34,7 @@ class Foo extends Controller {}
 
         const diagnostics = vscode.languages.getDiagnostics(document.uri);
 
-        assert.ok(diagnostics.some((item) => item.code === DiagnosticCode.ClassNotImported && item.message.includes('Controller')));
+        assert.ok(diagnostics.some((item) => item.code === DiagnosticCode.ClassNotImported && item.message.includes('DiagnosticMissingController')));
         assert.ok(diagnostics.some((item) => item.code === DiagnosticCode.ClassNotUsed && item.message.includes('Post')));
     });
 
@@ -43,7 +43,7 @@ class Foo extends Controller {}
 
 use App\\Models\\Post;
 
-class Foo extends Controller {}
+class Foo extends DiagnosticActionController {}
 `);
 
         await vscode.commands.executeCommand('phpImportHelper.refreshDiagnostics', document.uri);
@@ -52,7 +52,7 @@ class Foo extends Controller {}
         const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
             'vscode.executeCodeActionProvider',
             document.uri,
-            new vscode.Range(2, 0, 4, 28),
+            new vscode.Range(2, 0, 4, 80),
             vscode.CodeActionKind.QuickFix.value,
         );
 
@@ -87,7 +87,7 @@ class Foo {}
     test('quick fixes pass diagnostic target to import and expand commands', async () => {
         const document = await createPhpDocument(`<?php
 
-class Foo extends Controller {}
+class Foo extends DiagnosticCommandController {}
 `);
 
         await vscode.commands.executeCommand('phpImportHelper.refreshDiagnostics', document.uri);
@@ -96,15 +96,15 @@ class Foo extends Controller {}
         const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
             'vscode.executeCodeActionProvider',
             document.uri,
-            new vscode.Range(2, 18, 2, 28),
+            new vscode.Range(2, 18, 2, 80),
             vscode.CodeActionKind.QuickFix.value,
         );
         const importAction = actions?.find((action) => action.title === 'Import class');
         const expandAction = actions?.find((action) => action.title === 'Expand to fully qualified name');
 
-        assert.strictEqual(importAction?.command?.arguments?.[0], 'Controller');
+        assert.strictEqual(importAction?.command?.arguments?.[0], 'DiagnosticCommandController');
         assert.ok(importAction?.command?.arguments?.[1] instanceof vscode.Range);
-        assert.strictEqual(expandAction?.command?.arguments?.[0], 'Controller');
+        assert.strictEqual(expandAction?.command?.arguments?.[0], 'DiagnosticCommandController');
         assert.ok(expandAction?.command?.arguments?.[1] instanceof vscode.Range);
     });
 
