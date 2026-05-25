@@ -171,4 +171,17 @@ class Foo {}
         assert.ok(!text.includes('use App\\Models\\User;'));
         assert.ok(!text.includes('\n\n\nclass Foo'));
     });
+
+    test('preserves ignored unused imports', () => {
+        const text = manager.removeUnused(`<?php
+
+use App\\Facades\\Yii;
+use App\\Models\\Post;
+
+class Foo {}
+`, ['Yii']);
+
+        assert.ok(text.includes('use App\\Facades\\Yii;'));
+        assert.ok(!text.includes('use App\\Models\\Post;'));
+    });
 });
