@@ -83,6 +83,22 @@ class Foo {
         assert.ok(!text.includes('use App\\Models\\Post;'));
     });
 
+    test('keeps aliased imports used only in PHPDoc', () => {
+        const text = manager.removeUnused(`<?php
+
+use App\\Models\\User as AppUser;
+use App\\Models\\Post;
+
+class Foo {
+    /** @var AppUser */
+    private $user;
+}
+`);
+
+        assert.ok(text.includes('use App\\Models\\User as AppUser;'));
+        assert.ok(!text.includes('use App\\Models\\Post;'));
+    });
+
     test('keeps imported built-ins used in PHPDoc and runtime code', () => {
         const text = manager.removeUnused(`<?php
 

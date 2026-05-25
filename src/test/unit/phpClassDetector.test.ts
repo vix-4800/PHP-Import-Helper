@@ -56,6 +56,17 @@ class UserRepository {}
         }
     });
 
+    test('ignores method names and variable names in PHPDoc method tags', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @method Collection<User> users(Request $request)
+ */
+class UserRepository {}
+`);
+
+        assert.deepStrictEqual(result, ['Collection', 'User', 'Request']);
+    });
+
     test('ignores free-text descriptions after PHPDoc return and throws types', () => {
         const result = detector.detectAll(`<?php
 /**

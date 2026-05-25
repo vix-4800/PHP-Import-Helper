@@ -225,6 +225,40 @@ class Foo {
         assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'Response'));
     });
 
+    test('does not report fully qualified non-return PHPDoc types as missing imports', async () => {
+        const diagnostics = await diagnosticsFor(`<?php
+
+class Foo {
+    /**
+     * @param \App\Http\Request $request
+     * @throws \Domain\Exception\NotFoundException
+     * @see \Vendor\DocTarget
+     */
+    public function run($request): void {
+        throw new \Domain\Exception\NotFoundException();
+    }
+}
+`);
+
+        for (const name of ['Request', 'NotFoundException', 'DocTarget']) {
+            assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, name), name);
+        }
+    });
+
+    test('reports unresolved classes from parser fallback syntax', async () => {
+        const diagnostics = await diagnosticsFor(`<?php
+
+class Foo {
+    public private(set) PropertyValue $value {
+        set(HookValue $value) => $this->value = $value;
+    }
+}
+`);
+
+        assert.ok(hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'PropertyValue'));
+        assert.ok(hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'HookValue'));
+    });
+
     test('does not report same-namespace class when cache has multiple entries', async () => {
         const document = await createPhpDocument(`<?php
 

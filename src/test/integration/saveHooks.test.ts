@@ -51,4 +51,35 @@ class Controller {
             await config.update('sortOnSave', previousSort, vscode.ConfigurationTarget.Global);
         }
     });
+
+    test('keeps aliased PHPDoc-only imports on remove-on-save', async () => {
+        const config = vscode.workspace.getConfiguration('phpImportHelper');
+        const previousRemove = config.get<boolean>('removeOnSave', false);
+
+        try {
+            await config.update('removeOnSave', true, vscode.ConfigurationTarget.Global);
+
+            const editor = await openWorkspaceFile('save-hooks/DocblockAlias.php', `<?php
+
+use App\\Models\\User as AppUser;
+use App\\Models\\Post;
+
+class Controller {
+    /** @var AppUser */
+    private $user;
+}
+`);
+
+            await editor.edit((edit) => edit.insert(new vscode.Position(0, 0), '\n'));
+            await editor.document.save();
+            await wait(300);
+
+            const text = getText(editor);
+
+            assert.ok(text.includes('use App\\Models\\User as AppUser;'));
+            assert.ok(!text.includes('use App\\Models\\Post;'));
+        } finally {
+            await config.update('removeOnSave', previousRemove, vscode.ConfigurationTarget.Global);
+        }
+    });
 });
