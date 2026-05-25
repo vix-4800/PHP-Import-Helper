@@ -45,4 +45,28 @@ class Mockery {}
             },
         ]);
     });
+
+    test('prefers built-in global classes over cached namespace matches', async () => {
+        const resolver = new NamespaceResolver(
+            {
+                resolve: () => [{
+                    fqcn: 'RectorPrefix202605\\Nette\\Utils\\JsonException',
+                    source: 'vendor',
+                    uri: { fsPath: '/workspace/tools/rector/vendor/nette/utils/src/Utils/exceptions.php' } as never,
+                }],
+            },
+            {
+                findClassFiles: async () => [],
+                readFile: async () => '',
+            }
+        );
+
+        assert.deepStrictEqual(await resolver.resolve('JsonException'), [
+            {
+                fqcn: 'JsonException',
+                source: 'global',
+                uri: { fsPath: '' },
+            },
+        ]);
+    });
 });

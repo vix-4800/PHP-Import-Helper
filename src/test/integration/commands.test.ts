@@ -134,6 +134,34 @@ class Foo extends Controller {}
         assert.ok(text.includes('class Foo extends Controller {}'));
     });
 
+    test('import command prefers built-in classes over cached workspace matches', async () => {
+        const editor = await openPhpEditor(`<?php
+
+class Foo {
+    /**
+     * @throws JsonException
+     */
+    public function run(): void {}
+}
+`);
+        const position = editor.document.positionAt(getText(editor).indexOf('JsonException'));
+        editor.selection = new vscode.Selection(position, position);
+
+        await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
+            {
+                className: 'JsonException',
+                fqcn: 'RectorPrefix202605\\Nette\\Utils\\JsonException',
+                uri: editor.document.uri,
+            },
+        ]);
+        await vscode.commands.executeCommand('phpImportHelper.import');
+        await wait();
+
+        const text = getText(editor);
+        assert.ok(text.includes('use JsonException;'));
+        assert.ok(!text.includes('RectorPrefix202605\\Nette\\Utils\\JsonException'));
+    });
+
     test('import command imports selected fully qualified class without cache lookup', async () => {
         const editor = await openPhpEditor(`<?php
 
