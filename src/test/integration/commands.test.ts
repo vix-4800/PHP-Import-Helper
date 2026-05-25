@@ -225,6 +225,28 @@ class Foo extends Request {}
         assert.ok(!getText(editor).includes('use Vendor\\Http\\Request;'));
     });
 
+    test('import all imports fully qualified PHPDoc types', async () => {
+        const editor = await openPhpEditor(`<?php
+
+class Foo {
+    /**
+     * @return string|\\yii\\web\\Response
+     * @throws \\yii\\web\\NotFoundHttpException if the model cannot be found
+     */
+    public function run() {}
+}
+`);
+
+        await vscode.commands.executeCommand('phpImportHelper.importAll');
+        await wait();
+
+        const text = getText(editor);
+        assert.ok(text.includes('use yii\\web\\NotFoundHttpException;'));
+        assert.ok(text.includes('use yii\\web\\Response;'));
+        assert.ok(text.includes('@return string|Response'));
+        assert.ok(text.includes('@throws NotFoundHttpException if the model cannot be found'));
+    });
+
     test('generate namespace inserts namespace from nearest composer json', async () => {
         await vscode.workspace.fs.createDirectory(
             testFixtureRoot()

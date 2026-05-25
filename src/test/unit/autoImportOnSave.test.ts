@@ -93,4 +93,25 @@ class Foo {
 
         assert.ok(text.includes('new cl()'));
     });
+
+    test('imports fully qualified PHPDoc types on save', () => {
+        const cache = cacheWith({});
+        const autoImport = new AutoImportOnSave(detector, parser, cache);
+
+        const text = autoImport.computeText(documentWithText(`<?php
+
+class Foo {
+    /**
+     * @return string|\\yii\\web\\Response
+     * @throws \\yii\\web\\NotFoundHttpException if the model cannot be found
+     */
+    public function run() {}
+}
+`));
+
+        assert.ok(text.includes('use yii\\web\\NotFoundHttpException;'));
+        assert.ok(text.includes('use yii\\web\\Response;'));
+        assert.ok(text.includes('@return string|Response'));
+        assert.ok(text.includes('@throws NotFoundHttpException if the model cannot be found'));
+    });
 });
