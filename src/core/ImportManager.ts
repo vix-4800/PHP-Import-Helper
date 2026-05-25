@@ -34,7 +34,7 @@ export class ImportManager {
                 .useStatements.filter((item) => item.kind === 'class')
                 .map((item) => [item.fqcn, item.className])
         );
-        const sanitized = sanitizePhpCode(text);
+        const sanitized = sanitizePhpCode(text, { preservePhpDoc: true });
         const replacements = this.detector
             .detectFullyQualifiedReferences(text)
             .filter((item) => imported.has(item.rawName))

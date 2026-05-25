@@ -44,7 +44,7 @@ class Foo {
         assert.ok(text.includes('"\\yii\\httpclient\\Client::FORMAT_JSON"'));
     });
 
-    test('replaces FQCN constructors but not PHPDoc comments or heredoc content', () => {
+    test('replaces FQCN constructors and PHPDoc types but not heredoc content', () => {
         const text = manager.replaceImportedFullyQualifiedClasses(`<?php
 
 use App\\Services\\Client;
@@ -63,7 +63,7 @@ SQL;
 `);
 
         assert.ok(text.includes('new Client();'));
-        assert.ok(text.includes('@var \\App\\Services\\Client'));
+    assert.ok(text.includes('@var Client'));
         assert.ok(text.includes('new \\App\\Services\\Client()'));
     });
 

@@ -494,6 +494,15 @@ export function registerCommands(
             const imported = new Set(parser.getImportedClassNames(text));
             const detector = new PhpClassDetector();
 
+            for (const reference of detector.detectFullyQualifiedPhpDocReferences(text)) {
+                if (imported.has(reference.name)) {
+                    continue;
+                }
+
+                text = importManager.addImport(text, reference.rawName);
+                imported.add(reference.name);
+            }
+
             for (const className of detector.detectAll(text)) {
                 if (imported.has(className)) {
                     continue;
