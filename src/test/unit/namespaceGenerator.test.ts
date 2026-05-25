@@ -7,6 +7,10 @@ import {
 } from '../../core/NamespaceGenerator';
 import { parseAutoload } from '../../core/composer';
 
+function absolutePath(...segments: string[]): string {
+    return path.join(path.parse(process.cwd()).root, ...segments);
+}
+
 suite('generateNamespace', () => {
     test('generates namespace from psr-4 composer mapping', () => {
         const autoload = parseAutoload({
@@ -23,7 +27,7 @@ suite('generateNamespace', () => {
         const autoload = parseAutoload({
             autoload: { 'psr-4': { 'Package\\': 'src/' } },
         });
-        const composerDirectory = path.join(path.sep, 'workspace', 'packages', 'blog');
+        const composerDirectory = absolutePath('workspace', 'packages', 'blog');
         const filePath = path.join(composerDirectory, 'src', 'Http', 'Controller.php');
 
         assert.strictEqual(
@@ -70,7 +74,7 @@ class Foo {}
 
     test('finds nearest composer json walking upward to workspace root', async () => {
         const checked: string[] = [];
-        const workspaceRoot = path.join(path.sep, 'project');
+        const workspaceRoot = absolutePath('project');
         const composerPath = path.join(workspaceRoot, 'packages', 'blog', 'composer.json');
         const result = await findNearestComposerPath(
             path.join(workspaceRoot, 'packages', 'blog', 'src', 'Controller', 'PostController.php'),
@@ -92,7 +96,7 @@ class Foo {}
 
     test('does not search above workspace root for composer json', async () => {
         const checked: string[] = [];
-        const workspaceRoot = path.join(path.sep, 'project', 'packages');
+        const workspaceRoot = absolutePath('project', 'packages');
         const result = await findNearestComposerPath(
             path.join(workspaceRoot, 'blog', 'src', 'Post.php'),
             workspaceRoot,
@@ -104,6 +108,6 @@ class Foo {}
         );
 
         assert.strictEqual(result, null);
-        assert.ok(!checked.includes(path.join(path.sep, 'project', 'composer.json')));
+        assert.ok(!checked.includes(absolutePath('project', 'composer.json')));
     });
 });
