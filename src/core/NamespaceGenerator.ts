@@ -1,12 +1,33 @@
 import * as path from 'path';
 import { DeclarationParser } from './DeclarationParser';
-import type { AutoloadConfig } from './composer';
+import type { AutoloadConfig, AutoloadMapping } from './composer';
 import { resolveNamespace } from './composer';
 
-export function generateNamespace(filePath: string, autoload: AutoloadConfig): string | null {
-    const directory = path.dirname(filePath);
+function resolveMappingPaths(mapping: AutoloadMapping, basePath: string): AutoloadMapping {
+    return {
+        namespace: mapping.namespace,
+        paths: mapping.paths.map((mappingPath) => path.resolve(basePath, mappingPath)),
+    };
+}
 
-    return resolveNamespace(directory, autoload);
+function resolveAutoloadPaths(autoload: AutoloadConfig, basePath: string): AutoloadConfig {
+    return {
+        psr4: autoload.psr4.map((mapping) => resolveMappingPaths(mapping, basePath)),
+        psr0: autoload.psr0.map((mapping) => resolveMappingPaths(mapping, basePath)),
+    };
+}
+
+export function generateNamespace(
+    filePath: string,
+    autoload: AutoloadConfig,
+    basePath?: string
+): string | null {
+    const directory = path.dirname(filePath);
+    const resolvedAutoload = basePath === undefined
+        ? autoload
+        : resolveAutoloadPaths(autoload, basePath);
+
+    return resolveNamespace(directory, resolvedAutoload);
 }
 
 export async function findNearestComposerPath(
