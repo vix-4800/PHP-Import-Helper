@@ -56,6 +56,18 @@ class UserRepository {}
         }
     });
 
+    test('ignores free-text descriptions after PHPDoc return and throws types', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @return Alert the loaded model
+ * @throws NotFoundHttpException if the model cannot be found
+ */
+function findModel(): Alert {}
+`);
+
+        assert.deepStrictEqual(result, ['Alert', 'NotFoundHttpException']);
+    });
+
     test('ignores PHPDoc free-text code patterns and variable names', () => {
         const result = detector.detectAll(`<?php
 /**

@@ -185,6 +185,30 @@ class Foo {
         assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotUsed, 'ImportedDocType'));
     });
 
+    test('ignores free-text descriptions after PHPDoc return and throws types', async () => {
+        const diagnostics = await diagnosticsFor(`<?php
+
+use App\\Models\\Alert;
+use App\\Exceptions\\NotFoundHttpException;
+
+class Foo {
+    /**
+     * @return Alert the loaded model
+     * @throws NotFoundHttpException if the model cannot be found
+     */
+    protected function findModel(): Alert {
+        throw new NotFoundHttpException();
+    }
+}
+`);
+
+        for (const name of ['the', 'loaded', 'model', 'if', 'cannot', 'be', 'found']) {
+            assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, name), name);
+        }
+        assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotUsed, 'Alert'));
+        assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotUsed, 'NotFoundHttpException'));
+    });
+
     test('does not report same-namespace class when cache has multiple entries', async () => {
         const document = await createPhpDocument(`<?php
 
