@@ -83,6 +83,32 @@ class Foo {
         assert.ok(!text.includes('use App\\Models\\Post;'));
     });
 
+    test('keeps imported built-ins used in PHPDoc and runtime code', () => {
+        const text = manager.removeUnused(`<?php
+
+use Exception;
+use SplFileInfo;
+use App\\Models\\Post;
+
+class Foo {
+    /**
+     * @throws Exception
+     */
+    public function run(string $src): SplFileInfo {
+        try {
+            return new SplFileInfo($src);
+        } catch (Exception $e) {
+            throw $e;
+        }
+    }
+}
+`);
+
+        assert.ok(text.includes('use Exception;'));
+        assert.ok(text.includes('use SplFileInfo;'));
+        assert.ok(!text.includes('use App\\Models\\Post;'));
+    });
+
     test('removes only unused entries from grouped imports', () => {
         const text = manager.removeUnused(`<?php
 
