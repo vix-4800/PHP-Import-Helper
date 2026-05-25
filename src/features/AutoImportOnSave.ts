@@ -16,7 +16,10 @@ export class AutoImportOnSave {
     }
 
     public computeText(document: vscode.TextDocument): string {
-        let text = document.getText();
+        return this.computeTextForText(document.getText());
+    }
+
+    public computeTextForText(text: string): string {
         const imported = new Set(this.parser.getImportedClassNames(text));
 
         for (const className of this.detector.detectAll(text)) {

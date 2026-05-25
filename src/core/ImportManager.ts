@@ -63,9 +63,10 @@ export class ImportManager {
         return result;
     }
 
-    public removeUnused(text: string): string {
+    public removeUnused(text: string, ignoredClassNames: string[] = []): string {
         const parsed = this.parser.parse(text);
         const detected = new Set(this.detector.detectImportUsages(text));
+        const ignored = new Set(ignoredClassNames);
         const lines = text.split(/\r?\n/);
         const replacements = new Map<number, { endLine: number; text: string }>();
         const handledRanges = new Set<string>();
@@ -83,7 +84,9 @@ export class ImportManager {
                     item.endLine === statement.endLine &&
                     item.kind === 'class'
             );
-            const kept = siblings.filter((item) => this.isUsed(detected, item));
+            const kept = siblings.filter((item) =>
+                ignored.has(item.className) || this.isUsed(detected, item)
+            );
 
             if (kept.length === siblings.length) {
                 continue;
