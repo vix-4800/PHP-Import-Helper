@@ -42,13 +42,43 @@ function shortName(fqcn: string): string {
     return fqcn.split('\\').pop() ?? fqcn;
 }
 
+interface TypeReference {
+    name: string;
+    rawName: string;
+    fullyQualified: boolean;
+}
+
+function extractTypeReferences(typeExpression: string): TypeReference[] {
+    const seen = new Set<string>();
+    const result: TypeReference[] = [];
+
+    for (const match of typeExpression.matchAll(/\\?([A-Za-z_][A-Za-z0-9_]*)(?:\\[A-Za-z_][A-Za-z0-9_]*)*/g)) {
+        const rawName = match[0].replace(/\\+$/, '');
+        const normalized = rawName.replace(/^\\+/, '');
+        const name = shortName(normalized);
+
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || scalarTypes.has(name.toLowerCase())) {
+            continue;
+        }
+
+        const key = `${rawName}:${name}`;
+        if (seen.has(key)) {
+            continue;
+        }
+
+        seen.add(key);
+        result.push({
+            name,
+            rawName: normalized,
+            fullyQualified: rawName.startsWith('\\'),
+        });
+    }
+
+    return result;
+}
+
 function extractTypeNames(typeExpression: string): string[] {
-    return unique(
-        [...typeExpression.matchAll(/\\?([A-Za-z_][A-Za-z0-9_]*)(?:\\[A-Za-z_][A-Za-z0-9_]*)*/g)]
-            .map((match) => match[0].replace(/^\\+/, '').split('\\').pop() ?? '')
-            .filter((name) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
-            .filter((name) => !scalarTypes.has(name.toLowerCase()))
-    );
+    return unique(extractTypeReferences(typeExpression).map((item) => item.name));
 }
 
 function leadingPhpDocTypeExpression(body: string): string {
@@ -426,19 +456,21 @@ export class PhpClassDetector {
                 const body = lineMatch[2];
                 const expression = phpDocTypeExpression(tag, body);
 
-                for (const name of extractTypeNames(expression)) {
+                for (const reference of extractTypeReferences(expression)) {
+                    const { name, rawName, fullyQualified } = reference;
                     if (/^T[A-Z]/.test(name) && !expression.includes(`of ${name}`)) {
                         continue;
                     }
 
                     const index = lineMatch.index ?? 0;
-                    const nameOffset = offset + comment.value.indexOf(name, index);
-                    const importName = this.getImportUsageName(name);
+                    const searchValue = fullyQualified ? `\\${rawName}` : rawName;
+                    const nameOffset = offset + comment.value.indexOf(searchValue, index);
+                    const importName = fullyQualified ? null : this.getImportUsageName(name);
                     found.push({
                         name,
-                        rawName: name,
+                        rawName,
                         importName,
-                        fullyQualified: false,
+                        fullyQualified,
                         ...positionAt(text, nameOffset),
                     });
                 }
@@ -457,22 +489,26 @@ export class PhpClassDetector {
                     continue;
                 }
 
-                const names = extractTypeNames(value);
+                const references = extractTypeReferences(value);
                 const baseOffset = (match.index ?? 0) + match[0].indexOf(value);
 
-                for (const name of names) {
-                    const importName = this.getImportUsageName(name);
+                for (const reference of references) {
+                    const { name, rawName, fullyQualified } = reference;
+                    const importName = fullyQualified ? null : this.getImportUsageName(name);
                     if (importName === null) {
-                        continue;
+                        if (!fullyQualified) {
+                            continue;
+                        }
                     }
 
-                    const offset = source.indexOf(name, baseOffset);
+                    const searchValue = fullyQualified ? `\\${rawName}` : rawName;
+                    const offset = source.indexOf(searchValue, baseOffset);
                     const pos = positionAt(text, offset === -1 ? baseOffset : offset);
                     found.push({
                         name,
-                        rawName: name,
+                        rawName,
                         importName,
-                        fullyQualified: false,
+                        fullyQualified,
                         ...pos,
                     });
                 }
@@ -515,18 +551,20 @@ export class PhpClassDetector {
                 const body = lineMatch[2];
                 const expression = phpDocTypeExpression(tag, body);
 
-                for (const name of extractTypeNames(expression)) {
+                for (const reference of extractTypeReferences(expression)) {
+                    const { name, rawName, fullyQualified } = reference;
                     if (/^T[A-Z]/.test(name) && !expression.includes(`of ${name}`)) {
                         continue;
                     }
 
-                    const nameOffset = offset + phpDoc.indexOf(name, lineMatch.index ?? 0);
-                    const importName = this.getImportUsageName(name);
+                    const searchValue = fullyQualified ? `\\${rawName}` : rawName;
+                    const nameOffset = offset + phpDoc.indexOf(searchValue, lineMatch.index ?? 0);
+                    const importName = fullyQualified ? null : this.getImportUsageName(name);
                     found.push({
                         name,
-                        rawName: name,
+                        rawName,
                         importName,
-                        fullyQualified: false,
+                        fullyQualified,
                         ...positionAt(text, nameOffset),
                     });
                 }
