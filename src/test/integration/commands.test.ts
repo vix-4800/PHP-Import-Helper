@@ -98,6 +98,54 @@ class Foo extends Handler2 {}
         assert.ok(getText(editor).indexOf('Handler2') < getText(editor).indexOf('Handler10'));
     });
 
+    test('import command imports selected fully qualified class without cache lookup', async () => {
+        const editor = await openPhpEditor(`<?php
+
+class Foo {
+    public function show(): void {
+        new \\App\\Http\\Request();
+    }
+}
+`);
+        const fqcnOffset = getText(editor).indexOf('\\App\\Http\\Request') + 6;
+        const position = editor.document.positionAt(fqcnOffset);
+        editor.selection = new vscode.Selection(position, position);
+
+        await vscode.commands.executeCommand('phpImportHelper.import');
+        await wait();
+
+        const text = getText(editor);
+        assert.ok(text.includes('use App\\Http\\Request;'));
+        assert.ok(text.includes('new Request();'));
+        assert.ok(!text.includes('new \\App\\Http\\Request();'));
+    });
+
+    test('expand command expands multiple selections', async () => {
+        const editor = await openPhpEditor(`<?php
+
+class Foo extends Controller {
+    public function show(Request $request): Response {}
+}
+`);
+        editor.selections = ['Controller', 'Request', 'Response'].map((className) => {
+            const position = editor.document.positionAt(getText(editor).indexOf(className));
+            return new vscode.Selection(position, position);
+        });
+
+        await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
+            { className: 'Controller', fqcn: 'App\\Http\\Controller', uri: editor.document.uri },
+            { className: 'Request', fqcn: 'App\\Http\\Request', uri: editor.document.uri },
+            { className: 'Response', fqcn: 'App\\Http\\Response', uri: editor.document.uri },
+        ]);
+        await vscode.commands.executeCommand('phpImportHelper.expand');
+        await wait();
+
+        const text = getText(editor);
+        assert.ok(text.includes('\\App\\Http\\Controller'));
+        assert.ok(text.includes('\\App\\Http\\Request'));
+        assert.ok(text.includes('\\App\\Http\\Response'));
+    });
+
     test('import all command imports unique unresolved classes and cleans existing FQCN aliases', async () => {
         const editor = await openPhpEditor(`<?php
 
