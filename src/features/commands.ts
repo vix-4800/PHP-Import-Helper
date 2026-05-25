@@ -18,6 +18,16 @@ import type { CacheEntry, ResolvedNamespace } from '../types';
 import { parseClassTarget, type ClassTarget } from './commandTargets';
 import { getConfig, ignoredClasses, leadingSeparator, sortMode } from '../utils/config';
 
+function isSameNamespaceReference(
+    namespace: string | null,
+    className: string,
+    resolved: ResolvedNamespace[]
+): boolean {
+    const expected = namespace === null ? className : `${namespace}\\${className}`;
+
+    return resolved.some((item) => item.fqcn === expected);
+}
+
 function activePhpEditor(): vscode.TextEditor | null {
     const editor = vscode.window.activeTextEditor;
 
@@ -491,7 +501,12 @@ export function registerCommands(
             }
 
             let text = editor.document.getText();
-            const imported = new Set(parser.getImportedClassNames(text));
+            const parsed = parser.parse(text);
+            const imported = new Set(
+                parsed.useStatements
+                    .filter((item) => item.kind === 'class')
+                    .map((item) => item.className)
+            );
             const detector = new PhpClassDetector();
 
             for (const reference of detector.detectFullyQualifiedPhpDocReferences(text)) {
@@ -509,6 +524,10 @@ export function registerCommands(
                 }
 
                 const resolved = cache.resolve(className);
+                if (isSameNamespaceReference(parsed.namespace, className, resolved)) {
+                    continue;
+                }
+
                 if (resolved.length === 1) {
                     text = importManager.addImport(text, resolved[0].fqcn);
                     imported.add(className);
