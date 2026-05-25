@@ -93,6 +93,23 @@ function hydrate(array $data): void {}
         assert.deepStrictEqual(result, ['Foo', 'Bar', 'Baz', 'NumericSlot']);
     });
 
+    test('detects multiline PHPDoc tag type expressions', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @param array{
+ *     user: User,
+ *     posts: list<Post>
+ * } $data
+ * @return Collection<
+ *     Response
+ * >
+ */
+function hydrate(array $data) {}
+`);
+
+        assert.deepStrictEqual(result, ['User', 'Post', 'Collection', 'Response']);
+    });
+
     test('detects PHPDoc callable argument and return types', () => {
         const result = detector.detectAll(`<?php
 /**

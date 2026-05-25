@@ -225,6 +225,27 @@ class Foo {
         assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'Profile'));
     });
 
+    test('does not report multiline PHPDoc shape keys as missing imports', async () => {
+        const diagnostics = await diagnosticsFor(`<?php
+
+class Foo {
+    /**
+     * @param array{
+     *     user: User,
+     *     posts?: list<Post>
+     * } $data
+     */
+    public function hydrate(array $data): void {}
+}
+`);
+
+        assert.ok(hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'User'));
+        assert.ok(hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'Post'));
+        for (const name of ['user', 'posts']) {
+            assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, name), name);
+        }
+    });
+
     test('ignores free-text descriptions after PHPDoc return and throws types', async () => {
         const diagnostics = await diagnosticsFor(`<?php
 
