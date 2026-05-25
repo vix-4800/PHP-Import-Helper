@@ -164,6 +164,12 @@ function extractPhpDocTagMatches(text: string): RegExpMatchArray[] {
     return [...text.matchAll(phpDocTagPattern)];
 }
 
+function fallbackParameterTypeExpression(parameterList: string): string {
+    return parameterList
+        .replace(/#\[[^\]]*\]\s*/g, ' ')
+        .replace(/(?:&\s*)?(?:\.\.\.\s*)?\$[A-Za-z_][A-Za-z0-9_]*(?:\s*=\s*[^,]+)?/g, ' ');
+}
+
 function phpDocTypeExpression(tag: string, body: string): string {
     if (tag === 'template') {
         return body.replace(/^[A-Za-z_][A-Za-z0-9_]*\s+of\s+/, '');
@@ -553,14 +559,19 @@ export class PhpClassDetector {
         const sanitized = sanitizePhpCode(text, { preservePhpDoc: true });
         const found: DetectedClassReference[] = [];
 
-        const addMatches = (source: string, pattern: RegExp, group = 1): void => {
+        const addMatches = (
+            source: string,
+            pattern: RegExp,
+            group = 1,
+            transform: (value: string) => string = (value) => value
+        ): void => {
             for (const match of source.matchAll(pattern)) {
                 const value = match[group];
                 if (!value) {
                     continue;
                 }
 
-                const references = extractTypeReferences(value);
+                const references = extractTypeReferences(transform(value));
                 const baseOffset = (match.index ?? 0) + match[0].indexOf(value);
 
                 for (const reference of references) {
@@ -594,12 +605,17 @@ export class PhpClassDetector {
             sanitized,
             /\b(?:class|enum)\s+[A-Za-z_][A-Za-z0-9_]*(?::\s*\w+)?\s+implements\s+([^{]+)/g
         );
-        addMatches(sanitized, /\bfunction\s*(?:[A-Za-z_][A-Za-z0-9_]*)?\s*\(([^)]*)\)/g);
-        addMatches(sanitized, /\bfn\s*\(([^)]*)\)/g);
+        addMatches(
+            sanitized,
+            /\bfunction\s*(?:[A-Za-z_][A-Za-z0-9_]*)?\s*\(([^)]*)\)/g,
+            1,
+            fallbackParameterTypeExpression
+        );
+        addMatches(sanitized, /\bfn\s*\(([^)]*)\)/g, 1, fallbackParameterTypeExpression);
         addMatches(sanitized, /\)\s*:\s*([^{;=]+)/g);
         addMatches(
             sanitized,
-            /\b(?:public|protected|private)(?:\s+(?:static|readonly|private\(set\)|protected\(set\)))*\s+([^$;=]+)\s+\$[A-Za-z_]/g
+            /\b(?:public|protected|private)(?:\s+(?:static|readonly|private\(set\)|protected\(set\)))*\s+(?!function\b)([^$;=]+)\s+\$[A-Za-z_]/g
         );
         addMatches(
             sanitized,
