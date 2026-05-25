@@ -15,6 +15,7 @@ export class NamespaceCache implements vscode.Disposable {
     private watcher: vscode.FileSystemWatcher | null = null;
     private readonly updateTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly onDidUpdateEmitter = new vscode.EventEmitter<void>();
+    private initializePromise: Promise<void> | null = null;
 
     public readonly onDidUpdate = this.onDidUpdateEmitter.event;
 
@@ -55,6 +56,20 @@ export class NamespaceCache implements vscode.Disposable {
     }
 
     public async rebuild(fixtures?: CacheEntry[]): Promise<void> {
+        if (this.initializePromise !== null) {
+            await this.initializePromise;
+        }
+
+        await this.rebuildNow(fixtures);
+    }
+
+    public async initialize(): Promise<void> {
+        this.initializePromise ??= this.initializeNow();
+
+        await this.initializePromise;
+    }
+
+    private async rebuildNow(fixtures?: CacheEntry[]): Promise<void> {
         if (fixtures !== undefined) {
             this.setEntries(fixtures);
             await this.persistIndex();
@@ -78,11 +93,11 @@ export class NamespaceCache implements vscode.Disposable {
         this.onDidUpdateEmitter.fire();
     }
 
-    public async initialize(): Promise<void> {
+    private async initializeNow(): Promise<void> {
         const loaded = await this.loadPersistedIndex();
 
         if (!loaded) {
-            await this.rebuild();
+            await this.rebuildNow();
         } else {
             const changed = await this.incrementalUpdate();
             if (changed) {
@@ -159,10 +174,22 @@ export class NamespaceCache implements vscode.Disposable {
             '**/*.php',
             getConfig().get<string>('exclude', '**/node_modules/**')
         );
+        const candidates = new Map<string, vscode.Uri>();
         const seen = new Set<string>();
         let changed = false;
 
         for (const uri of files) {
+            candidates.set(uri.toString(), uri);
+        }
+
+        for (const uriString of this.fileIndex.keys()) {
+            const uri = vscode.Uri.parse(uriString);
+            if (this.shouldRefreshPersistedFile(uri)) {
+                candidates.set(uriString, uri);
+            }
+        }
+
+        for (const uri of candidates.values()) {
             const uriString = uri.toString();
             seen.add(uriString);
             const existing = this.fileIndex.get(uriString);
@@ -201,6 +228,18 @@ export class NamespaceCache implements vscode.Disposable {
             uri.fsPath === folder.uri.fsPath ||
             uri.fsPath.startsWith(`${folder.uri.fsPath.replace(/\/$/, '')}/`)
         ) ?? false;
+    }
+
+    private shouldRefreshPersistedFile(uri: vscode.Uri): boolean {
+        if (uri.scheme !== 'file' || !uri.fsPath.endsWith('.php')) {
+            return false;
+        }
+
+        const currentDirectory = process.cwd().replace(/\/$/, '');
+
+        return this.isInWorkspace(uri) ||
+            uri.fsPath === currentDirectory ||
+            uri.fsPath.startsWith(`${currentDirectory}/`);
     }
 
     private async loadPersistedIndex(): Promise<boolean> {
