@@ -1,3 +1,4 @@
+import { builtInClasses } from './builtInClasses';
 import { NamespaceIndex } from './NamespaceIndex';
 import type { ResolvedNamespace } from '../types';
 
@@ -21,6 +22,14 @@ export class NamespaceResolver {
     ) {}
 
     public async resolve(className: string, activeUri?: UriLike): Promise<ResolvedNamespace[]> {
+        if (builtInClasses.has(className)) {
+            return [{
+                fqcn: className,
+                source: 'global',
+                uri: { fsPath: '' } as ResolvedNamespace['uri'],
+            }];
+        }
+
         const cached = this.cache.resolve(className);
         if (cached.length > 0) {
             return cached;
