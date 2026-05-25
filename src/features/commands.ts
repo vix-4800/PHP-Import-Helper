@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
+import * as path from 'path';
 import type { DeclarationParser } from '../core/DeclarationParser';
 import { ImportManager } from '../core/ImportManager';
 import type { NamespaceCache } from '../core/NamespaceCache';
@@ -474,13 +475,9 @@ export function registerCommands(
             }
 
             const workspaceFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
-            if (workspaceFolder === undefined) {
-                return;
-            }
-
             const composerPath = await findNearestComposerPath(
                 editor.document.uri.fsPath,
-                workspaceFolder.uri.fsPath,
+                workspaceFolder?.uri.fsPath ?? path.parse(editor.document.uri.fsPath).root,
                 async (candidate) => await fs.access(candidate).then(() => true, () => false)
             );
             if (composerPath === null) {
@@ -495,7 +492,8 @@ export function registerCommands(
 
             const namespace = generateNamespace(
                 editor.document.uri.fsPath,
-                parseAutoload(JSON.parse(composerText) as unknown)
+                parseAutoload(JSON.parse(composerText) as unknown),
+                path.dirname(composerPath)
             );
             if (namespace !== null && namespace !== '') {
                 await replaceDocument(
