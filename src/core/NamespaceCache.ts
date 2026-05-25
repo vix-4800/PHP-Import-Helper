@@ -175,7 +175,7 @@ export class NamespaceCache implements vscode.Disposable {
 
             try {
                 const stat = await vscode.workspace.fs.stat(uri);
-                if (stat.mtime !== existing.mtime) {
+                if (existing.mtime <= 0 || stat.mtime !== existing.mtime) {
                     await this.indexFile(uri);
                     changed = true;
                 }
