@@ -69,6 +69,19 @@ export class NamespaceCache implements vscode.Disposable {
         await this.initializePromise;
     }
 
+    private normalizeFsPath(fsPath: string): string {
+        const normalized = fsPath.replace(/\\/g, '/').replace(/\/+$/, '');
+        return /^[A-Za-z]:/.test(normalized) ? normalized.toLowerCase() : normalized;
+    }
+
+    private isWithinPath(parent: string, target: string): boolean {
+        const normalizedParent = this.normalizeFsPath(parent);
+        const normalizedTarget = this.normalizeFsPath(target);
+
+        return normalizedTarget === normalizedParent ||
+            normalizedTarget.startsWith(`${normalizedParent}/`);
+    }
+
     private async rebuildNow(fixtures?: CacheEntry[]): Promise<void> {
         if (fixtures !== undefined) {
             this.setEntries(fixtures);
@@ -225,8 +238,7 @@ export class NamespaceCache implements vscode.Disposable {
 
     private isInWorkspace(uri: vscode.Uri): boolean {
         return vscode.workspace.workspaceFolders?.some((folder) =>
-            uri.fsPath === folder.uri.fsPath ||
-            uri.fsPath.startsWith(`${folder.uri.fsPath.replace(/\/$/, '')}/`)
+            this.isWithinPath(folder.uri.fsPath, uri.fsPath)
         ) ?? false;
     }
 
@@ -235,11 +247,10 @@ export class NamespaceCache implements vscode.Disposable {
             return false;
         }
 
-        const currentDirectory = process.cwd().replace(/\/$/, '');
+        const currentDirectory = process.cwd();
 
         return this.isInWorkspace(uri) ||
-            uri.fsPath === currentDirectory ||
-            uri.fsPath.startsWith(`${currentDirectory}/`);
+            this.isWithinPath(currentDirectory, uri.fsPath);
     }
 
     private async loadPersistedIndex(): Promise<boolean> {
