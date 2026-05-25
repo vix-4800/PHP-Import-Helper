@@ -6,12 +6,12 @@ interface UriLike {
 }
 
 interface CacheLike {
-    resolve(className: string): ResolvedNamespace[];
+    resolve: (className: string) => ResolvedNamespace[];
 }
 
 interface NamespaceResolverWorkspace {
-    findClassFiles(className: string, activeUri?: UriLike): Promise<UriLike[]>;
-    readFile(uri: UriLike): Promise<string>;
+    findClassFiles: (className: string, activeUri?: UriLike) => Promise<UriLike[]>;
+    readFile: (uri: UriLike) => Promise<string>;
 }
 
 export class NamespaceResolver {

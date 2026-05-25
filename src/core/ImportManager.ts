@@ -3,10 +3,6 @@ import { getInsertPosition } from './insertPosition';
 import { PhpClassDetector } from './PhpClassDetector';
 import type { UseStatement } from '../types';
 
-function escapeRegex(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 export class ImportManager {
     private readonly detector = new PhpClassDetector();
 

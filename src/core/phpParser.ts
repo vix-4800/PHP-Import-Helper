@@ -144,12 +144,12 @@ export class PhpAstParser {
 
     public walk(
         node: PhpAstNode | null | undefined,
-        visitor: (node: PhpAstNode, parent: PhpAstNode | null, key: string | number | null) => void
+        visitor: (node: PhpAstNode, parent: PhpAstNode | null, key: number | string | null) => void
     ): void {
         const visit = (
             current: unknown,
             parent: PhpAstNode | null,
-            key: string | number | null
+            key: number | string | null
         ): void => {
             if (!this.isNode(current)) {
                 return;

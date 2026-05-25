@@ -153,7 +153,7 @@ async function aliasForConflict(
     editor: vscode.TextEditor,
     parser: DeclarationParser,
     fqcn: string
-): Promise<string | undefined | null> {
+): Promise<string | null | undefined> {
     const parsed = parser.parse(editor.document.getText());
     const candidateName = shortName(fqcn);
     const hasConflict = parsed.useStatements.some((statement) =>
