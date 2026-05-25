@@ -230,18 +230,21 @@ class Foo {
 
 class Foo {
     /**
-     * @param \App\Http\Request $request
-     * @throws \Domain\Exception\NotFoundException
-     * @see \Vendor\DocTarget
+     * @param \\App\\Http\\Request $request
+     * @throws \\Domain\\Exception\\NotFoundException
+     * @see \\Vendor\\DocTarget
      */
     public function run($request): void {
-        throw new \Domain\Exception\NotFoundException();
+        throw new \\Domain\\Exception\\NotFoundException();
     }
 }
 `);
 
         for (const name of ['Request', 'NotFoundException', 'DocTarget']) {
-            assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, name), name);
+            assert.ok(
+                !hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, name),
+                `${name}: ${diagnostics.map((item) => item.message).join(' | ')}`
+            );
         }
     });
 
