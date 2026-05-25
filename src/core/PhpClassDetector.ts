@@ -48,6 +48,9 @@ interface TypeReference {
     fullyQualified: boolean;
 }
 
+const phpDocTagPattern =
+    /^\s*(?:\/?\*+\s*)?@(param|return|var|throws|property(?:-read|-write)?|mixin|extends|implements|method|see|template)\s+(.+?)(?:\s*\*\/)?$/gm;
+
 function extractTypeReferences(typeExpression: string): TypeReference[] {
     const seen = new Set<string>();
     const result: TypeReference[] = [];
@@ -134,6 +137,33 @@ function leadingPhpDocTypeExpression(body: string): string {
     return trimmed;
 }
 
+function methodPhpDocTypeExpression(body: string): string {
+    const normalized = body.trim().replace(/^static\s+/, '');
+    const openParen = normalized.indexOf('(');
+    const closeParen = normalized.lastIndexOf(')');
+
+    if (openParen === -1 || closeParen === -1 || closeParen < openParen) {
+        return normalized;
+    }
+
+    const beforeParams = normalized.slice(0, openParen).trim();
+    const params = normalized.slice(openParen + 1, closeParen);
+    const match = /^(?:(.+?)\s+)?([A-Za-z_][A-Za-z0-9_]*)$/.exec(beforeParams);
+
+    if (match === null) {
+        return normalized;
+    }
+
+    const returnType = match[1]?.trim() ?? '';
+    const parameterTypes = params.replace(/\$[A-Za-z_][A-Za-z0-9_]*(?:\s*=\s*[^,]+)?/g, '');
+
+    return [returnType, parameterTypes.trim()].filter((item) => item !== '').join(' ');
+}
+
+function extractPhpDocTagMatches(text: string): RegExpMatchArray[] {
+    return [...text.matchAll(phpDocTagPattern)];
+}
+
 function phpDocTypeExpression(tag: string, body: string): string {
     if (tag === 'template') {
         return body.replace(/^[A-Za-z_][A-Za-z0-9_]*\s+of\s+/, '');
@@ -145,6 +175,10 @@ function phpDocTypeExpression(tag: string, body: string): string {
 
     if (tag === 'return' || tag === 'throws' || tag === 'mixin' || tag === 'see') {
         return leadingPhpDocTypeExpression(body);
+    }
+
+    if (tag === 'method') {
+        return methodPhpDocTypeExpression(body);
     }
 
     return body;
@@ -449,9 +483,7 @@ export class PhpClassDetector {
             }
 
             processedComments.add(offset);
-            for (const lineMatch of comment.value.matchAll(
-                /^\s*\*\s*@(param|return|var|throws|property(?:-read|-write)?|mixin|extends|implements|method|see|template)\s+(.+)$/gm
-            )) {
+            for (const lineMatch of extractPhpDocTagMatches(comment.value)) {
                 const tag = lineMatch[1];
                 const body = lineMatch[2];
                 const expression = phpDocTypeExpression(tag, body);
@@ -544,9 +576,7 @@ export class PhpClassDetector {
             const phpDoc = block[0];
             const offset = block.index ?? 0;
 
-            for (const lineMatch of phpDoc.matchAll(
-                /^\s*\*\s*@(param|return|var|throws|property(?:-read|-write)?|mixin|extends|implements|method|see|template)\s+(.+)$/gm
-            )) {
+            for (const lineMatch of extractPhpDocTagMatches(phpDoc)) {
                 const tag = lineMatch[1];
                 const body = lineMatch[2];
                 const expression = phpDocTypeExpression(tag, body);
