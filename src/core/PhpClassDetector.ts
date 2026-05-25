@@ -1,4 +1,5 @@
 import { builtInClasses } from './builtInClasses';
+import { parsePhpDocBlocks, parsePhpDocTags, type PhpDocTag } from './PhpDocTagParser';
 import { parsePhpDocTypeReferences, type PhpDocTypeReference } from './PhpDocTypeParser';
 import {
     PhpAstParser,
@@ -42,9 +43,6 @@ function blankRange(chars: string[], start: number, end: number): void {
 function shortName(fqcn: string): string {
     return fqcn.split('\\').pop() ?? fqcn;
 }
-
-const phpDocTagPattern =
-    /^\s*(?:\/?\*+\s*)?@(param|return|var|throws|property(?:-read|-write)?|mixin|extends|implements|method|see|template)\s+(.+?)(?:\s*\*\/)?$/gm;
 
 function extractTypeReferences(typeExpression: string): PhpDocTypeReference[] {
     return parsePhpDocTypeReferences(typeExpression);
@@ -130,8 +128,8 @@ function methodPhpDocTypeExpression(body: string): string {
     return [returnType, parameterTypes.trim()].filter((item) => item !== '').join(' ');
 }
 
-function extractPhpDocTagMatches(text: string): RegExpMatchArray[] {
-    return [...text.matchAll(phpDocTagPattern)];
+function extractPhpDocTagMatches(text: string): PhpDocTag[] {
+    return parsePhpDocTags(text);
 }
 
 function fallbackParameterTypeExpression(parameterList: string): string {
@@ -277,13 +275,12 @@ export class PhpClassDetector {
     public detectFullyQualifiedPhpDocReferences(text: string): DetectedClassReference[] {
         const found: DetectedClassReference[] = [];
 
-        for (const block of text.matchAll(/\/\*\*[\s\S]*?\*\//g)) {
-            const phpDoc = block[0];
-            const offset = block.index ?? 0;
+        for (const block of parsePhpDocBlocks(text)) {
+            const phpDoc = block.text;
+            const offset = block.index;
 
             for (const lineMatch of extractPhpDocTagMatches(phpDoc)) {
-                const tag = lineMatch[1];
-                const body = lineMatch[2];
+                const { tag, body } = lineMatch;
                 const expression = phpDocTypeExpression(tag, body);
 
                 for (const reference of extractTypeReferences(expression)) {
@@ -297,8 +294,8 @@ export class PhpClassDetector {
                     }
 
                     const searchValue = `\\${rawName}`;
-                    const searchOffset = phpDoc.indexOf(searchValue, lineMatch.index ?? 0);
-                    const nameOffset = offset + (searchOffset === -1 ? (lineMatch.index ?? 0) : searchOffset);
+                    const searchOffset = phpDoc.indexOf(searchValue, lineMatch.index);
+                    const nameOffset = offset + (searchOffset === -1 ? lineMatch.index : searchOffset);
                     found.push({
                         name,
                         rawName,
@@ -499,8 +496,7 @@ export class PhpClassDetector {
 
             processedComments.add(offset);
             for (const lineMatch of extractPhpDocTagMatches(comment.value)) {
-                const tag = lineMatch[1];
-                const body = lineMatch[2];
+                const { tag, body } = lineMatch;
                 const expression = phpDocTypeExpression(tag, body);
 
                 for (const reference of extractTypeReferences(expression)) {
@@ -509,9 +505,8 @@ export class PhpClassDetector {
                         continue;
                     }
 
-                    const index = lineMatch.index ?? 0;
                     const searchValue = fullyQualified ? `\\${rawName}` : rawName;
-                    const nameOffset = offset + comment.value.indexOf(searchValue, index);
+                    const nameOffset = offset + comment.value.indexOf(searchValue, lineMatch.index);
                     found.push({
                         name,
                         rawName,
@@ -595,13 +590,12 @@ export class PhpClassDetector {
         addMatches(sanitized, /\bcatch\s*\(([^)$]+)(?:\$[A-Za-z_][A-Za-z0-9_]*)?\)/g);
         addMatches(sanitized, /#\[(.*?)\]/gs);
 
-        for (const block of text.matchAll(/\/\*\*[\s\S]*?\*\//g)) {
-            const phpDoc = block[0];
-            const offset = block.index ?? 0;
+        for (const block of parsePhpDocBlocks(text)) {
+            const phpDoc = block.text;
+            const offset = block.index;
 
             for (const lineMatch of extractPhpDocTagMatches(phpDoc)) {
-                const tag = lineMatch[1];
-                const body = lineMatch[2];
+                const { tag, body } = lineMatch;
                 const expression = phpDocTypeExpression(tag, body);
 
                 for (const reference of extractTypeReferences(expression)) {
@@ -611,7 +605,7 @@ export class PhpClassDetector {
                     }
 
                     const searchValue = fullyQualified ? `\\${rawName}` : rawName;
-                    const nameOffset = offset + phpDoc.indexOf(searchValue, lineMatch.index ?? 0);
+                    const nameOffset = offset + phpDoc.indexOf(searchValue, lineMatch.index);
                     found.push({
                         name,
                         rawName,
