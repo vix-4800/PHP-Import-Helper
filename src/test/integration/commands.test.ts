@@ -78,6 +78,23 @@ class Foo extends Controller {}
         }
     });
 
+    test('expand command ignores editor context document uri argument', async () => {
+        const editor = await openPhpEditor(`<?php
+
+class Foo extends Controller {}
+`);
+        const position = new vscode.Position(2, 20);
+        editor.selection = new vscode.Selection(position, position);
+
+        await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
+            { className: 'Controller', fqcn: 'yii\\web\\Controller', uri: editor.document.uri },
+        ]);
+        await vscode.commands.executeCommand('phpImportHelper.expand', editor.document.uri);
+        await wait();
+
+        assert.ok(getText(editor).includes('\\yii\\web\\Controller'));
+    });
+
     test('import command sorts imports when autoSort is enabled', async () => {
         const editor = await openPhpEditor(`<?php
 
@@ -96,6 +113,25 @@ class Foo extends Handler2 {}
         await wait();
 
         assert.ok(getText(editor).indexOf('Handler2') < getText(editor).indexOf('Handler10'));
+    });
+
+    test('import command ignores editor context document uri argument', async () => {
+        const editor = await openPhpEditor(`<?php
+
+class Foo extends Controller {}
+`);
+        const position = new vscode.Position(2, 20);
+        editor.selection = new vscode.Selection(position, position);
+
+        await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
+            { className: 'Controller', fqcn: 'yii\\web\\Controller', uri: editor.document.uri },
+        ]);
+        await vscode.commands.executeCommand('phpImportHelper.import', editor.document.uri);
+        await wait();
+
+        const text = getText(editor);
+        assert.ok(text.includes('use yii\\web\\Controller;'));
+        assert.ok(text.includes('class Foo extends Controller {}'));
     });
 
     test('import command imports selected fully qualified class without cache lookup', async () => {
