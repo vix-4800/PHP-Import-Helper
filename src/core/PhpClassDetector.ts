@@ -51,6 +51,59 @@ function extractTypeNames(typeExpression: string): string[] {
     );
 }
 
+function leadingPhpDocTypeExpression(body: string): string {
+    const trimmed = body.trim();
+    let angleDepth = 0;
+    let roundDepth = 0;
+    let curlyDepth = 0;
+    let squareDepth = 0;
+
+    for (let index = 0; index < trimmed.length; index++) {
+        const current = trimmed[index];
+
+        switch (current) {
+            case '<':
+                angleDepth++;
+                continue;
+            case '>':
+                angleDepth = Math.max(0, angleDepth - 1);
+                continue;
+            case '(':
+                roundDepth++;
+                continue;
+            case ')':
+                roundDepth = Math.max(0, roundDepth - 1);
+                continue;
+            case '{':
+                curlyDepth++;
+                continue;
+            case '}':
+                curlyDepth = Math.max(0, curlyDepth - 1);
+                continue;
+            case '[':
+                squareDepth++;
+                continue;
+            case ']':
+                squareDepth = Math.max(0, squareDepth - 1);
+                continue;
+            default:
+                break;
+        }
+
+        if (
+            /\s/.test(current) &&
+            angleDepth === 0 &&
+            roundDepth === 0 &&
+            curlyDepth === 0 &&
+            squareDepth === 0
+        ) {
+            return trimmed.slice(0, index);
+        }
+    }
+
+    return trimmed;
+}
+
 function phpDocTypeExpression(tag: string, body: string): string {
     if (tag === 'template') {
         return body.replace(/^[A-Za-z_][A-Za-z0-9_]*\s+of\s+/, '');
@@ -58,6 +111,10 @@ function phpDocTypeExpression(tag: string, body: string): string {
 
     if (tag === 'param' || tag === 'var' || tag.startsWith('property')) {
         return body.replace(/\s+\$[A-Za-z_][A-Za-z0-9_]*.*$/, '');
+    }
+
+    if (tag === 'return' || tag === 'throws' || tag === 'mixin' || tag === 'see') {
+        return leadingPhpDocTypeExpression(body);
     }
 
     return body;
