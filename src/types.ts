@@ -39,6 +39,7 @@ export interface DetectedClassReference extends DetectedClass {
     rawName: string;
     importName: string | null;
     fullyQualified: boolean;
+    importCandidate?: boolean;
 }
 
 export interface ResolvedNamespace {
