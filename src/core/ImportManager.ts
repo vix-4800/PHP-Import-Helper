@@ -1,6 +1,6 @@
 import type { DeclarationParser } from './DeclarationParser';
 import { getInsertPosition } from './insertPosition';
-import { PhpClassDetector } from './PhpClassDetector';
+import { PhpClassDetector, sanitizePhpCode } from './PhpClassDetector';
 import type { UseStatement } from '../types';
 
 export class ImportManager {
@@ -34,9 +34,15 @@ export class ImportManager {
                 .useStatements.filter((item) => item.kind === 'class')
                 .map((item) => [item.fqcn, item.className])
         );
+        const sanitized = sanitizePhpCode(text);
         const replacements = this.detector
             .detectFullyQualifiedReferences(text)
             .filter((item) => imported.has(item.rawName))
+            .filter((item) => {
+                const start = this.offsetAt(sanitized, item.line, item.character);
+
+                return sanitized.startsWith(`\\${item.rawName}`, start);
+            })
             .sort((left, right) => {
                 if (left.line !== right.line) {
                     return right.line - left.line;
