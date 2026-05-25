@@ -3,6 +3,7 @@ import * as fs from 'fs/promises';
 import type { DeclarationParser } from '../core/DeclarationParser';
 import { ImportManager } from '../core/ImportManager';
 import type { NamespaceCache } from '../core/NamespaceCache';
+import { NamespaceResolver } from '../core/NamespaceResolver';
 import {
     applyGeneratedNamespace,
     findNearestComposerPath,
@@ -13,12 +14,46 @@ import { SortManager } from '../core/SortManager';
 import { UseFoldingRangeCalculator } from '../core/UseFoldingRangeCalculator';
 import { parseAutoload } from '../core/composer';
 import type { CacheEntry, ResolvedNamespace } from '../types';
-import { getConfig, leadingSeparator, sortMode } from '../utils/config';
+import { parseClassTarget, type ClassTarget } from './commandTargets';
+import { getConfig, ignoredClasses, leadingSeparator, sortMode } from '../utils/config';
 
 function activePhpEditor(): vscode.TextEditor | null {
     const editor = vscode.window.activeTextEditor;
 
     return editor?.document.languageId === 'php' ? editor : null;
+}
+
+function wordRangeAtSelection(editor: vscode.TextEditor): vscode.Range | undefined {
+    return editor.document.getWordRangeAtPosition(
+        editor.selection.active,
+        /\\?[A-Za-z_][A-Za-z0-9_\\]*/
+    );
+}
+
+function selectedTarget(editor: vscode.TextEditor): { target: ClassTarget; range?: vscode.Range } | null {
+    const range = wordRangeAtSelection(editor);
+
+    if (range === undefined) {
+        return null;
+    }
+
+    const target = parseClassTarget(editor.document.getText(range));
+
+    return target === null ? null : { target, range };
+}
+
+function commandTarget(
+    editor: vscode.TextEditor,
+    className?: string,
+    range?: vscode.Range
+): { target: ClassTarget; range?: vscode.Range } | null {
+    if (className !== undefined) {
+        const target = parseClassTarget(className);
+
+        return target === null ? null : { target, range };
+    }
+
+    return selectedTarget(editor);
 }
 
 function selectedWord(editor: vscode.TextEditor): string | null {
@@ -77,6 +112,43 @@ async function chooseResolved(
     return picked?.resolved ?? null;
 }
 
+function createNamespaceResolver(cache: NamespaceCache): NamespaceResolver {
+    return new NamespaceResolver(cache, {
+        findClassFiles: async (className, activeUri) => {
+            const exclude = getConfig(
+                activeUri === undefined ? undefined : vscode.Uri.file(activeUri.fsPath)
+            ).get<string>('exclude', '**/node_modules/**');
+            const folder = activeUri === undefined
+                ? undefined
+                : vscode.workspace.getWorkspaceFolder(vscode.Uri.file(activeUri.fsPath));
+            const pattern = folder === undefined
+                ? `**/${className}.php`
+                : new vscode.RelativePattern(folder, `**/${className}.php`);
+
+            return await vscode.workspace.findFiles(pattern, exclude);
+        },
+        readFile: async (uri) => Buffer.from(
+            await vscode.workspace.fs.readFile(vscode.Uri.file(uri.fsPath))
+        ).toString('utf8'),
+    });
+}
+
+async function resolveTarget(
+    resolver: NamespaceResolver,
+    target: ClassTarget,
+    activeUri: vscode.Uri
+): Promise<ResolvedNamespace | null> {
+    if (target.fqcn !== null) {
+        return {
+            fqcn: target.fqcn,
+            source: 'project',
+            uri: activeUri,
+        };
+    }
+
+    return await chooseResolved(target.className, await resolver.resolve(target.className, activeUri));
+}
+
 async function aliasForConflict(
     editor: vscode.TextEditor,
     parser: DeclarationParser,
@@ -97,7 +169,18 @@ async function aliasForConflict(
     return await vscode.window.showInputBox({
         prompt: `Alias for ${fqcn}`,
         value: candidateName,
-        validateInput: (value) => value.trim() === '' ? 'Alias is required.' : null,
+        validateInput: (value) => {
+            const alias = value.trim();
+            if (alias === '') {
+                return 'Alias is required.';
+            }
+
+            return parsed.useStatements.some((statement) =>
+                statement.kind === 'class' && statement.className === alias
+            )
+                ? 'Alias is already in use.'
+                : null;
+        },
     }) ?? null;
 }
 
@@ -169,6 +252,7 @@ export function registerCommands(
 ): void {
     const importManager = new ImportManager(parser);
     const sortManager = new SortManager(parser);
+    const resolver = createNamespaceResolver(cache);
 
     context.subscriptions.push(
         vscode.commands.registerCommand(
@@ -207,7 +291,13 @@ export function registerCommands(
                 return;
             }
 
-            await replaceDocument(editor, importManager.removeUnused(editor.document.getText()));
+            await replaceDocument(
+                editor,
+                importManager.removeUnused(
+                    editor.document.getText(),
+                    ignoredClasses(editor.document.uri)
+                )
+            );
             diagnostics.update(editor.document);
         }),
         vscode.commands.registerCommand('phpImportHelper.expand', async (
@@ -219,18 +309,26 @@ export function registerCommands(
                 return;
             }
 
-            const word = targetWord(editor, className);
-            if (word === null) {
+            if (className === undefined && targetRange === undefined && editor.selections.length > 1) {
+                for (const selection of editor.selections) {
+                    editor.selection = selection;
+                    await vscode.commands.executeCommand('phpImportHelper.expand');
+                }
                 return;
             }
 
-            const resolved = await chooseResolved(word, cache.resolve(word));
+            const target = commandTarget(editor, className, targetRange);
+            if (target === null) {
+                return;
+            }
+
+            const resolved = await resolveTarget(resolver, target.target, editor.document.uri);
             if (resolved === null) {
                 return;
             }
 
             const prefix = leadingSeparator(editor.document.uri) ? '\\' : '';
-            await replaceTargetWord(editor, `${prefix}${resolved.fqcn}`, targetRange);
+            await replaceTargetWord(editor, `${prefix}${resolved.fqcn}`, target.range);
         }),
         vscode.commands.registerCommand('phpImportHelper.import', async (
             className?: string,
@@ -241,19 +339,38 @@ export function registerCommands(
                 return;
             }
 
-            const word = targetWord(editor, className);
-            if (word === null) {
+            if (className === undefined && targetRange === undefined && editor.selections.length > 1) {
+                for (const selection of editor.selections) {
+                    editor.selection = selection;
+                    await vscode.commands.executeCommand('phpImportHelper.import');
+                }
                 return;
             }
 
-            const resolved = await chooseResolved(word, cache.resolve(word));
+            const target = commandTarget(editor, className, targetRange);
+            if (target === null) {
+                return;
+            }
+
+            const resolved = await resolveTarget(resolver, target.target, editor.document.uri);
             if (resolved === null) {
                 return;
             }
 
-            if (parser.parse(editor.document.getText()).useStatements.some((statement) =>
+            const parsed = parser.parse(editor.document.getText());
+            const existingImport = parsed.useStatements.find((statement) =>
                 statement.kind === 'class' && statement.fqcn === resolved.fqcn
-            )) {
+            );
+            if (existingImport !== undefined) {
+                if (target.target.fqcn !== null) {
+                    await replaceDocument(
+                        editor,
+                        importManager.replaceImportedFullyQualifiedClasses(editor.document.getText())
+                    );
+                    diagnostics.update(editor.document);
+                    return;
+                }
+
                 void vscode.window.showInformationMessage(`${resolved.fqcn} is already imported.`);
                 return;
             }
@@ -264,13 +381,21 @@ export function registerCommands(
             }
 
             const originalText = editor.document.getText();
-            const aliasRange = alias === undefined ? undefined : resolveTargetRange(editor, targetRange);
+            const aliasRange =
+                alias === undefined && target.target.fqcn === null
+                    ? undefined
+                    : resolveTargetRange(editor, target.range);
+            const replacementName = alias ?? shortName(resolved.fqcn);
             const textWithAlias =
-                alias === undefined || aliasRange === undefined
+                aliasRange === undefined
                     ? originalText
-                    : replaceRangeInText(editor.document, originalText, aliasRange, alias);
-            const importedText = importManager.addImport(textWithAlias, resolved.fqcn, alias);
-            await replaceDocument(editor, sortWhenConfigured(importedText, editor.document.uri, sortManager));
+                    : replaceRangeInText(editor.document, originalText, aliasRange, replacementName);
+            let importedText = importManager.addImport(textWithAlias, resolved.fqcn, alias);
+            importedText = importManager.replaceImportedFullyQualifiedClasses(importedText);
+            await replaceDocument(
+                editor,
+                sortWhenConfigured(importedText, editor.document.uri, sortManager)
+            );
             diagnostics.update(editor.document);
         }),
         vscode.commands.registerCommand('phpImportHelper.importAll', async () => {
