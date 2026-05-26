@@ -27,18 +27,38 @@
   ],
   "keywords": [
     "php",
+    "php imports",
+    "php use statements",
+    "phpdoc",
     "namespace",
     "class",
     "import",
+    "imports",
     "expand",
+    "composer",
     "autoload",
     "psr-4",
-    "php8"
+    "php8",
+    "yii",
+    "laravel"
   ],
   "activationEvents": [
     "onLanguage:php"
   ],
   "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "description": "PHP Import Helper parses PHP source and updates imports without executing workspace code."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "PHP Import Helper needs filesystem access to index PHP classes and read composer.json."
+    }
+  },
   "contributes": {
     "configuration": {
       "type": "object",
@@ -47,21 +67,25 @@
         "phpImportHelper.exclude": {
           "type": "string",
           "default": "**/node_modules/**",
+          "scope": "resource",
           "description": "Glob pattern to exclude while finding PHP files."
         },
         "phpImportHelper.autoSort": {
           "type": "boolean",
           "default": true,
+          "scope": "resource",
           "description": "Sort imports after adding a new import."
         },
         "phpImportHelper.autoFoldUses": {
           "type": "boolean",
           "default": false,
+          "scope": "resource",
           "description": "Fold import blocks when opening or switching PHP files."
         },
         "phpImportHelper.sortOnSave": {
           "type": "boolean",
           "default": false,
+          "scope": "resource",
           "description": "Sort imports on save."
         },
         "phpImportHelper.sortMode": {
@@ -72,21 +96,25 @@
             "alphabetical"
           ],
           "default": "natural",
+          "scope": "resource",
           "description": "Import sort mode."
         },
         "phpImportHelper.leadingSeparator": {
           "type": "boolean",
           "default": true,
+          "scope": "resource",
           "description": "Prepend a leading backslash when expanding class names."
         },
         "phpImportHelper.removeOnSave": {
           "type": "boolean",
           "default": false,
+          "scope": "resource",
           "description": "Remove unused imports on save."
         },
         "phpImportHelper.autoImportOnSave": {
           "type": "boolean",
           "default": false,
+          "scope": "resource",
           "description": "Import uniquely resolved classes on save."
         },
         "phpImportHelper.ignoreList": {
@@ -95,16 +123,19 @@
             "type": "string"
           },
           "default": [],
+          "scope": "resource",
           "description": "Class names ignored by diagnostics."
         },
         "phpImportHelper.highlightNotImported": {
           "type": "boolean",
           "default": true,
+          "scope": "resource",
           "description": "Report unimported classes."
         },
         "phpImportHelper.highlightNotUsed": {
           "type": "boolean",
           "default": true,
+          "scope": "resource",
           "description": "Report unused imports."
         }
       }
