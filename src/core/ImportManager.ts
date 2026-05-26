@@ -35,13 +35,16 @@ export class ImportManager {
                 .map((item) => [item.fqcn, item.className])
         );
         const sanitized = sanitizePhpCode(text, { preservePhpDoc: true });
-        const replacements = this.detector
-            .detectFullyQualifiedReferences(text)
+        const replacements = [
+            ...this.detector.detectFullyQualifiedReferences(text),
+            ...this.detector.detectQualifiedPhpDocReferences(text),
+        ]
             .filter((item) => imported.has(item.rawName))
             .filter((item) => {
                 const start = this.offsetAt(sanitized, item.line, item.character);
+                const qualifiedName = item.fullyQualified ? `\\${item.rawName}` : item.rawName;
 
-                return sanitized.startsWith(`\\${item.rawName}`, start);
+                return sanitized.startsWith(qualifiedName, start);
             })
             .sort((left, right) => {
                 if (left.line !== right.line) {
@@ -59,7 +62,8 @@ export class ImportManager {
             }
 
             const start = this.offsetAt(result, reference.line, reference.character);
-            result = `${result.slice(0, start)}${alias}${result.slice(start + reference.rawName.length + 1)}`;
+            const length = reference.rawName.length + (reference.fullyQualified ? 1 : 0);
+            result = `${result.slice(0, start)}${alias}${result.slice(start + length)}`;
         }
 
         return result;

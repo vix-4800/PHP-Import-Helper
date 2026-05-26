@@ -310,6 +310,40 @@ export class PhpClassDetector {
         return this.uniqueReferences(found);
     }
 
+    public detectQualifiedPhpDocReferences(text: string): DetectedClassReference[] {
+        const found: DetectedClassReference[] = [];
+
+        for (const block of parsePhpDocBlocks(text)) {
+            const phpDoc = block.text;
+            const offset = block.index;
+
+            for (const lineMatch of extractPhpDocTagMatches(phpDoc)) {
+                const { tag, body } = lineMatch;
+                const expression = phpDocTypeExpression(tag, body);
+
+                for (const reference of extractTypeReferences(expression)) {
+                    const { rawName, fullyQualified, importName, importCandidate } = reference;
+                    if (fullyQualified || !rawName.includes('\\')) {
+                        continue;
+                    }
+
+                    const searchOffset = phpDoc.indexOf(rawName, lineMatch.index);
+                    const nameOffset = offset + (searchOffset === -1 ? lineMatch.index : searchOffset);
+                    found.push({
+                        name: shortName(rawName),
+                        rawName,
+                        importName,
+                        fullyQualified: false,
+                        importCandidate,
+                        ...positionAt(text, nameOffset),
+                    });
+                }
+            }
+        }
+
+        return this.uniqueReferences(found);
+    }
+
     public detectReferences(text: string): DetectedClassReference[] {
         const document = this.parser.parse(text);
         const found = this.detectAstReferences(document);
