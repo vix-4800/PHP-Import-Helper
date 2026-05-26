@@ -3,6 +3,7 @@
   "displayName": "PHP Import Helper",
   "description": "Import, expand, sort, diagnose, and manage PHP namespaces",
   "version": "0.0.2",
+  "icon": "icon.png",
   "publisher": "vix",
   "galleryBanner": {
     "color": "#1e1e1e",
