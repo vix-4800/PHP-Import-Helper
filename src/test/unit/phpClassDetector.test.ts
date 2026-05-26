@@ -145,6 +145,58 @@ function findModel(): Alert {}
         assert.deepStrictEqual(result, ['Alert', 'NotFoundHttpException']);
     });
 
+    test('ignores PHPDoc var descriptions without variable names and unsupported tags', () => {
+        const result = detector.detectAll(`<?php
+class Queue {
+    /**
+     * Message Group ID for FIFO queues.
+     * @var string
+     * @since 2.2.1
+     */
+    public $messageGroupId = 'default';
+
+    /**
+     * @var string command class name
+     * @inheritdoc
+     */
+    public $commandClass = Command::class;
+
+    /**
+     * Json serializer by default.
+     * @inheritdoc
+     */
+    public $serializer = JsonSerializer::class;
+}
+`);
+
+        assert.deepStrictEqual(result, ['Command', 'JsonSerializer']);
+    });
+
+    test('does not append unsupported PHPDoc tags to previous type tags', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @return Response
+ * @since 1.0
+ * @inheritdoc
+ * @customTag HiddenType
+ */
+function run() {}
+`);
+
+        assert.deepStrictEqual(result, ['Response']);
+    });
+
+    test('detects PHPDoc var type when description has class-like words and no variable name', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @var Collection<User> command class name
+ */
+$items = [];
+`);
+
+        assert.deepStrictEqual(result, ['Collection', 'User']);
+    });
+
     test('ignores PHPDoc free-text code patterns and variable names', () => {
         const result = detector.detectAll(`<?php
 /**
