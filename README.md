@@ -1,5 +1,10 @@
 # PHP Import Helper
 
+[![Version](https://vsmarketplacebadges.dev/version/vix.php-import-helper)](https://marketplace.visualstudio.com/items?itemName=vix.php-import-helper)
+[![Installs](https://vsmarketplacebadges.dev/installs-short/vix.php-import-helper.svg)](https://marketplace.visualstudio.com/items?itemName=vix.php-import-helper)
+[![Rating](https://vsmarketplacebadges.dev/rating-short/vix.php-import-helper.svg)](https://marketplace.visualstudio.com/items?itemName=vix.php-import-helper)
+![License](https://img.shields.io/github/license/vix-4800/php-import-helper)
+
 VS Code extension for PHP imports and namespaces. It resolves classes from the workspace, adds and expands imports, sorts and folds `use` blocks, removes unused imports, generates namespaces from Composer autoload config, and reports import diagnostics.
 
 ## Features
