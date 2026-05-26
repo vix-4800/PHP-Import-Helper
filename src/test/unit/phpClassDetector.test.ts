@@ -373,6 +373,46 @@ abstract class StripChatParent extends CRMSelenium
         assert.ok(!result.includes('useClickAccept'));
     });
 
+    test('ignores method declarations and ternary array values in fallback mode', () => {
+        class FallbackParser extends PhpAstParser {
+            public override parse(code: string, filename?: string) {
+                const document = super.parse(code, filename);
+
+                return {
+                    ...document,
+                    errors: [...document.errors, { message: 'Forced fallback' }],
+                };
+            }
+        }
+
+        const fallbackDetector = new PhpClassDetector(new FallbackParser());
+        const result = fallbackDetector.detectAll(`<?php
+
+class HelpDesk {
+    public static function createLinkToQueue(int $help_desk_id, int $queue_id): bool
+    {
+        return new Query()->createCommand();
+    }
+
+    public function photos(): array
+    {
+        $response[] = [
+            'caption' => $width > 0 ? $width . 'x' . $height : 'Not image',
+            'filename' => $photo->url,
+            'downloadUrl' => Url::to(['file2', 'filename' => $photo->url]),
+            'url' => Url::to(['xhr-delete-file', 'id' => $helpDeskId]),
+        ];
+    }
+}
+`);
+
+        assert.ok(result.includes('Query'));
+        assert.ok(result.includes('Url'));
+        for (const name of ['function', 'createLinkToQueue', 'i', 'x', 'f', 'to', 'u', 'url']) {
+            assert.ok(!result.includes(name), `${name} should be ignored`);
+        }
+    });
+
     test('does not detect variable static access or anonymous class expressions', () => {
         const result = detector.detectAll(`<?php
 
