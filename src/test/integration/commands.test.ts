@@ -184,6 +184,28 @@ class Foo {
         assert.ok(!text.includes('new \\App\\Http\\Request();'));
     });
 
+    test('import command shortens selected qualified PHPDoc name already imported', async () => {
+        const editor = await openPhpEditor(`<?php
+
+use backend\\models\\HelpDeskMedia;
+
+/**
+ * @var backend\\models\\HelpDeskMedia $mediaModel
+ */
+`);
+        const fqcnOffset = getText(editor).lastIndexOf('backend\\models\\HelpDeskMedia') + 18;
+        const position = editor.document.positionAt(fqcnOffset);
+        editor.selection = new vscode.Selection(position, position);
+
+        await vscode.commands.executeCommand('phpImportHelper.import');
+        await wait();
+
+        const text = getText(editor);
+        assert.ok(text.includes('use backend\\models\\HelpDeskMedia;'));
+        assert.ok(text.includes('@var HelpDeskMedia $mediaModel'));
+        assert.strictEqual((text.match(/backend\\models\\HelpDeskMedia/g) ?? []).length, 1);
+    });
+
     test('expand command expands multiple selections', async () => {
         const editor = await openPhpEditor(`<?php
 
@@ -310,6 +332,25 @@ class Foo {
         assert.ok(text.includes('use yii\\web\\NotFoundHttpException;'));
         assert.ok(text.includes('use yii\\web\\Response;'));
         assert.ok(text.includes('@return array{response: Response, errors?: list<NotFoundHttpException>}'));
+    });
+
+    test('import all shortens qualified PHPDoc names that are already imported', async () => {
+        const editor = await openPhpEditor(`<?php
+
+use backend\\models\\HelpDeskMedia;
+
+/**
+ * @var backend\\models\\HelpDeskMedia $mediaModel
+ */
+`);
+
+        await vscode.commands.executeCommand('phpImportHelper.importAll');
+        await wait();
+
+        const text = getText(editor);
+        assert.ok(text.includes('use backend\\models\\HelpDeskMedia;'));
+        assert.ok(text.includes('@var HelpDeskMedia $mediaModel'));
+        assert.strictEqual((text.match(/backend\\models\\HelpDeskMedia/g) ?? []).length, 1);
     });
 
     test('generate namespace inserts namespace from nearest composer json', async () => {

@@ -92,6 +92,24 @@ class Foo {
         assert.strictEqual((text.match(/use App\\Http\\Request;/g) ?? []).length, 1);
     });
 
+    test('shortens already imported PHPDoc qualified names on save', () => {
+        const cache = cacheWith({});
+        const autoImport = new AutoImportOnSave(detector, parser, cache);
+
+        const text = autoImport.computeText(documentWithText(`<?php
+
+use backend\\models\\HelpDeskMedia;
+
+/**
+ * @var backend\\models\\HelpDeskMedia $mediaModel
+ */
+`));
+
+        assert.ok(text.includes('@var HelpDeskMedia $mediaModel'));
+        assert.strictEqual((text.match(/use backend\\models\\HelpDeskMedia;/g) ?? []).length, 1);
+        assert.strictEqual((text.match(/backend\\models\\HelpDeskMedia/g) ?? []).length, 1);
+    });
+
     test('replaces imported fully qualified classes with existing aliases', () => {
         const cache = cacheWith({});
         const autoImport = new AutoImportOnSave(detector, parser, cache);

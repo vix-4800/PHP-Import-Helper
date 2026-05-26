@@ -84,6 +84,21 @@ class Foo {
         assert.ok(text.includes('@return array{response: Response, errors?: list<NotFoundHttpException>}'));
     });
 
+    test('replaces imported PHPDoc qualified names without leading separator', () => {
+        const text = manager.replaceImportedFullyQualifiedClasses(`<?php
+
+use backend\\models\\HelpDeskMedia;
+
+/**
+ * @var backend\\models\\HelpDeskMedia $mediaModel
+ */
+`);
+
+        assert.ok(text.includes('@var HelpDeskMedia $mediaModel'));
+        assert.strictEqual((text.match(/use backend\\models\\HelpDeskMedia;/g) ?? []).length, 1);
+        assert.strictEqual((text.match(/backend\\models\\HelpDeskMedia/g) ?? []).length, 1);
+    });
+
     test('removes unused imports while keeping PHPDoc-only usages', () => {
         const text = manager.removeUnused(`<?php
 
