@@ -94,7 +94,7 @@ export class PhpAstParser {
         };
 
         this.engine = new Parser.Engine({
-            parser: { extractDoc: true, suppressErrors: true },
+            parser: { extractDoc: true, suppressErrors: true, version: 804 },
             ast: { withPositions: true },
         });
     }

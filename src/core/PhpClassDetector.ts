@@ -575,10 +575,14 @@ export class PhpClassDetector {
             fallbackParameterTypeExpression
         );
         addMatches(sanitized, /\bfn\s*\(([^)]*)\)/g, 1, fallbackParameterTypeExpression);
-        addMatches(sanitized, /\)\s*:\s*([^{;=]+)/g);
         addMatches(
             sanitized,
-            /\b(?:public|protected|private)(?:\s+(?:static|readonly|private\(set\)|protected\(set\)))*\s+(?!function\b)([^$;=]+)\s+\$[A-Za-z_]/g
+            /\bfunction\s*(?:[A-Za-z_][A-Za-z0-9_]*)?\s*\([^)]*\)\s*:\s*([^{;=]+)/g
+        );
+        addMatches(sanitized, /\bfn\s*\([^)]*\)\s*:\s*([^=]+)=>/g);
+        addMatches(
+            sanitized,
+            /\b(?:public|protected|private)(?![^\n;{]*\bfunction\b)(?:\s+(?:static|readonly|private\(set\)|protected\(set\)))*\s+([^$;=]+)\s+\$[A-Za-z_]/g
         );
         addMatches(
             sanitized,
