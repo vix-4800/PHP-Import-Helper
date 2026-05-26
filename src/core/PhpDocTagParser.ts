@@ -145,6 +145,11 @@ export function parsePhpDocTags(text: string): PhpDocTag[] {
             continue;
         }
 
+        if (line.content[0] === '@') {
+            current = null;
+            continue;
+        }
+
         if (current === null || line.content === '') {
             continue;
         }

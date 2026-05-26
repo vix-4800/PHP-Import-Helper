@@ -143,7 +143,11 @@ function phpDocTypeExpression(tag: string, body: string): string {
         return body.replace(/^[A-Za-z_][A-Za-z0-9_]*\s+of\s+/, '');
     }
 
-    if (tag === 'param' || tag === 'var' || tag.startsWith('property')) {
+    if (tag === 'var') {
+        return leadingPhpDocTypeExpression(body.replace(/\s+\$[A-Za-z_][A-Za-z0-9_]*.*$/, ''));
+    }
+
+    if (tag === 'param' || tag.startsWith('property')) {
         return body.replace(/\s+\$[A-Za-z_][A-Za-z0-9_]*.*$/, '');
     }
 
