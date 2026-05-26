@@ -18,7 +18,7 @@ This repository is a bundled VS Code extension for PHP import management. It imp
 
 - Keep `src/extension.ts` thin.
 - Use `phpImportHelper.*` for public command and config IDs.
-- Use TDD: write failing test first, then implementation.
+- Always use TDD: write failing unit test first, confirm it fails, then implement.
 - Keep changes local to requested behaviour.
 - Do not add abstractions for future flexibility.
 - If user-visible command/config behaviour changes, update `package.json`, README, and tests.
@@ -36,5 +36,4 @@ This repository is a bundled VS Code extension for PHP import management. It imp
 - `npm run check-types`
 - `npm run package`
 - `npm run test:unit`
-- `npm run test:integration`
-- `npm test`
+- Do not run `npm run test:integration` or `npm test` by default. VS Code integration tests do not work reliably in this environment; ask the user to run them if needed.
