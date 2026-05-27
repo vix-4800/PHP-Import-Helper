@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { NamespaceIndex } from './NamespaceIndex';
+import { NamespaceCacheUpdateQueue } from './NamespaceCacheUpdateQueue';
 import type {
     CacheActivityEvent,
     CacheActivityPhase,
@@ -11,6 +12,9 @@ import { getConfig } from '../utils/config';
 export class NamespaceCache implements vscode.Disposable {
     private static readonly indexVersion = 1;
     private static readonly indexFileName = 'namespace-index.json';
+    private static readonly fileBatchSize = 64;
+    private static readonly statBatchSize = 256;
+    private static readonly updateDebounceMs = 1000;
 
     private readonly index = new NamespaceIndex();
     private readonly fileIndex = new Map<
@@ -18,16 +22,20 @@ export class NamespaceCache implements vscode.Disposable {
         { mtime: number; entries: Array<{ className: string; fqcn: string }> }
     >();
     private watcher: vscode.FileSystemWatcher | null = null;
-    private readonly updateTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private updateTimer: ReturnType<typeof setTimeout> | null = null;
+    private readonly updateQueue: NamespaceCacheUpdateQueue<vscode.Uri>;
     private readonly onDidUpdateEmitter = new vscode.EventEmitter<void>();
     private readonly onDidChangeActivityEmitter = new vscode.EventEmitter<CacheActivityEvent>();
     private initializePromise: Promise<void> | null = null;
-    private readonly scheduledUpdateStates = new Map<string, 'scheduled' | 'processing'>();
+    private updateActivityActive = false;
+    private processingUpdate = false;
 
     public readonly onDidUpdate = this.onDidUpdateEmitter.event;
     public readonly onDidChangeActivity = this.onDidChangeActivityEmitter.event;
 
-    public constructor(private readonly storageUri?: vscode.Uri) {}
+    public constructor(private readonly storageUri?: vscode.Uri) {
+        this.updateQueue = new NamespaceCacheUpdateQueue((uri) => this.shouldIndexWatchedUri(uri));
+    }
 
     public setEntries(entries: CacheEntry[]): void {
         this.index.setEntries(entries);
@@ -110,9 +118,7 @@ export class NamespaceCache implements vscode.Disposable {
             getConfig().get<string>('exclude', '**/node_modules/**')
         );
 
-        for (const uri of files) {
-            await this.indexFile(uri);
-        }
+        await this.indexFiles(files);
 
         await this.persistIndex();
         this.onDidUpdateEmitter.fire();
@@ -134,19 +140,14 @@ export class NamespaceCache implements vscode.Disposable {
         this.watcher = vscode.workspace.createFileSystemWatcher('**/*.php');
         this.watcher.onDidCreate((uri) => this.scheduleIndexFile(uri));
         this.watcher.onDidChange((uri) => this.scheduleIndexFile(uri));
-        this.watcher.onDidDelete((uri) => {
-            this.removeFile(uri);
-            void this.persistIndex();
-            this.onDidUpdateEmitter.fire();
-        });
+        this.watcher.onDidDelete((uri) => this.scheduleRemoveFile(uri));
     }
 
     public dispose(): void {
-        for (const timer of this.updateTimers.values()) {
-            clearTimeout(timer);
+        if (this.updateTimer !== null) {
+            clearTimeout(this.updateTimer);
         }
-        this.updateTimers.clear();
-        this.scheduledUpdateStates.clear();
+        this.updateTimer = null;
 
         this.watcher?.dispose();
         this.onDidUpdateEmitter.dispose();
@@ -154,35 +155,74 @@ export class NamespaceCache implements vscode.Disposable {
     }
 
     private scheduleIndexFile(uri: vscode.Uri): void {
-        const key = uri.toString();
-        const existingTimer = this.updateTimers.get(key);
-        if (existingTimer !== undefined) {
-            clearTimeout(existingTimer);
-        } else {
-            if (this.scheduledUpdateStates.size === 0) {
-                this.onDidChangeActivityEmitter.fire({ kind: 'start', phase: 'update' });
-            }
-            this.scheduledUpdateStates.set(key, 'scheduled');
+        if (!this.updateQueue.addChanged(uri)) {
+            return;
         }
 
-        this.updateTimers.set(key, setTimeout(() => {
-            this.updateTimers.delete(key);
-            this.scheduledUpdateStates.set(key, 'processing');
-            void this.indexFile(uri).then(async () => {
-                await this.persistIndex();
-                this.onDidUpdateEmitter.fire();
-            }).finally(() => {
-                if (this.updateTimers.has(key)) {
-                    this.scheduledUpdateStates.set(key, 'scheduled');
-                    return;
+        this.scheduleQueuedUpdate();
+    }
+
+    private scheduleRemoveFile(uri: vscode.Uri): void {
+        if (!this.updateQueue.addDeleted(uri)) {
+            return;
+        }
+
+        this.scheduleQueuedUpdate();
+    }
+
+    private scheduleQueuedUpdate(): void {
+        if (!this.updateActivityActive) {
+            this.updateActivityActive = true;
+            this.onDidChangeActivityEmitter.fire({ kind: 'start', phase: 'update' });
+        }
+
+        if (this.updateTimer !== null) {
+            clearTimeout(this.updateTimer);
+        }
+
+        this.updateTimer = setTimeout(() => {
+            this.updateTimer = null;
+            void this.processQueuedUpdate();
+        }, NamespaceCache.updateDebounceMs);
+    }
+
+    private async processQueuedUpdate(): Promise<void> {
+        if (this.processingUpdate) {
+            return;
+        }
+
+        this.processingUpdate = true;
+        let changed = false;
+
+        try {
+            while (this.updateQueue.size > 0) {
+                const batch = this.updateQueue.consume();
+
+                for (const uri of batch.deleted) {
+                    this.removeFile(uri);
                 }
 
-                this.scheduledUpdateStates.delete(key);
-                if (this.scheduledUpdateStates.size === 0) {
-                    this.onDidChangeActivityEmitter.fire({ kind: 'end', phase: 'update' });
-                }
-            });
-        }, 250));
+                await this.indexFiles(batch.changed);
+                changed = changed || batch.changed.length > 0 || batch.deleted.length > 0;
+            }
+
+            if (changed) {
+                await this.persistIndex();
+                this.onDidUpdateEmitter.fire();
+            }
+        } finally {
+            this.processingUpdate = false;
+
+            if (this.updateQueue.size > 0) {
+                this.scheduleQueuedUpdate();
+                return;
+            }
+
+            if (this.updateActivityActive) {
+                this.updateActivityActive = false;
+                this.onDidChangeActivityEmitter.fire({ kind: 'end', phase: 'update' });
+            }
+        }
     }
 
     private async runActivity<T>(
@@ -225,6 +265,12 @@ export class NamespaceCache implements vscode.Disposable {
         this.fileIndex.delete(uri.toString());
     }
 
+    private async indexFiles(uris: vscode.Uri[]): Promise<void> {
+        await this.mapInBatches(uris, NamespaceCache.fileBatchSize, async (uri) => {
+            await this.indexFile(uri);
+        });
+    }
+
     private async incrementalUpdate(): Promise<boolean> {
         const files = await vscode.workspace.findFiles(
             '**/*.php',
@@ -245,27 +291,32 @@ export class NamespaceCache implements vscode.Disposable {
             }
         }
 
-        for (const uri of candidates.values()) {
+        const toIndex = await this.mapInBatches([...candidates.values()], NamespaceCache.statBatchSize, async (uri) => {
             const uriString = uri.toString();
             seen.add(uriString);
             const existing = this.fileIndex.get(uriString);
 
             if (existing === undefined) {
-                await this.indexFile(uri);
-                changed = true;
-                continue;
+                return uri;
             }
 
             try {
                 const stat = await vscode.workspace.fs.stat(uri);
                 if (existing.mtime <= 0 || stat.mtime !== existing.mtime) {
-                    await this.indexFile(uri);
-                    changed = true;
+                    return uri;
                 }
             } catch {
                 this.removeFile(uri);
                 changed = true;
             }
+
+            return null;
+        });
+
+        const changedFiles = toIndex.filter((uri): uri is vscode.Uri => uri !== null);
+        if (changedFiles.length > 0) {
+            await this.indexFiles(changedFiles);
+            changed = true;
         }
 
         for (const uriString of [...this.fileIndex.keys()]) {
@@ -279,10 +330,31 @@ export class NamespaceCache implements vscode.Disposable {
         return changed;
     }
 
+    private async mapInBatches<T, TResult>(
+        items: T[],
+        batchSize: number,
+        operation: (item: T) => Promise<TResult>
+    ): Promise<TResult[]> {
+        const results: TResult[] = [];
+
+        for (let index = 0; index < items.length; index += batchSize) {
+            const batch = items.slice(index, index + batchSize);
+            results.push(...await Promise.all(batch.map(operation)));
+        }
+
+        return results;
+    }
+
     private isInWorkspace(uri: vscode.Uri): boolean {
         return vscode.workspace.workspaceFolders?.some((folder) =>
             this.isWithinPath(folder.uri.fsPath, uri.fsPath)
         ) ?? false;
+    }
+
+    private shouldIndexWatchedUri(uri: vscode.Uri): boolean {
+        return uri.scheme === 'file' &&
+            uri.fsPath.endsWith('.php') &&
+            this.isInWorkspace(uri);
     }
 
     private shouldRefreshPersistedFile(uri: vscode.Uri): boolean {
