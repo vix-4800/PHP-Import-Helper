@@ -3,6 +3,11 @@ import * as vscode from 'vscode';
 import { NamespaceCache } from '../../core/NamespaceCache';
 import { openWorkspaceFile, wait } from './helper';
 
+type CacheActivityEvent = {
+    kind: 'start' | 'end';
+    phase: 'initialize' | 'rebuild' | 'update';
+};
+
 function storageUri(name: string): vscode.Uri {
     return vscode.Uri.joinPath(
         vscode.Uri.file(process.cwd()),
@@ -14,6 +19,23 @@ function storageUri(name: string): vscode.Uri {
 }
 
 suite('NamespaceCache', () => {
+    test('emits initialize activity while loading cache', async () => {
+        const storage = storageUri(`initialize-${Date.now()}`);
+        const cache = new NamespaceCache(storage);
+        const events: CacheActivityEvent[] = [];
+
+        cache.onDidChangeActivity((event) => events.push(event));
+
+        await cache.initialize();
+
+        assert.deepStrictEqual(events, [
+            { kind: 'start', phase: 'initialize' },
+            { kind: 'end', phase: 'initialize' },
+        ]);
+
+        cache.dispose();
+    });
+
     test('persists rebuilt fixture index and loads it on initialize', async () => {
         const storage = storageUri(`persist-${Date.now()}`);
         const className = `PersistedUser${Date.now()}`;
@@ -36,6 +58,29 @@ suite('NamespaceCache', () => {
         ]);
 
         second.dispose();
+    });
+
+    test('emits rebuild activity while rebuilding fixture index', async () => {
+        const storage = storageUri(`rebuild-${Date.now()}`);
+        const cache = new NamespaceCache(storage);
+        const events: CacheActivityEvent[] = [];
+
+        cache.onDidChangeActivity((event) => events.push(event));
+
+        await cache.rebuild([
+            {
+                className: `RebuiltUser${Date.now()}`,
+                fqcn: 'App\\Models\\RebuiltUser',
+                uri: vscode.Uri.file('/project/app/Models/RebuiltUser.php'),
+            },
+        ]);
+
+        assert.deepStrictEqual(events, [
+            { kind: 'start', phase: 'rebuild' },
+            { kind: 'end', phase: 'rebuild' },
+        ]);
+
+        cache.dispose();
     });
 
     test('ignores persisted index with unsupported version', async () => {
@@ -90,6 +135,36 @@ class ${className} {}
         await wait(300);
 
         assert.deepStrictEqual(cache.resolve(oldClassName), []);
+        assert.deepStrictEqual(cache.resolve(className).map((item) => item.fqcn), [
+            `App\\Models\\${className}`,
+        ]);
+
+        cache.dispose();
+    });
+
+    test('emits update activity for watched file changes', async () => {
+        const storage = storageUri(`watch-${Date.now()}`);
+        const className = `WatchedUser${Date.now()}`;
+        const cache = new NamespaceCache(storage);
+        const events: CacheActivityEvent[] = [];
+
+        cache.onDidChangeActivity((event) => events.push(event));
+
+        await cache.initialize();
+        events.length = 0;
+
+        await openWorkspaceFile(`cache-watch/${className}.php`, `<?php
+
+namespace App\\Models;
+
+class ${className} {}
+`);
+        await wait(600);
+
+        assert.deepStrictEqual(events, [
+            { kind: 'start', phase: 'update' },
+            { kind: 'end', phase: 'update' },
+        ]);
         assert.deepStrictEqual(cache.resolve(className).map((item) => item.fqcn), [
             `App\\Models\\${className}`,
         ]);
