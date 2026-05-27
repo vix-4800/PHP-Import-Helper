@@ -63,7 +63,7 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.onDidChangeActiveTextEditor((editor) => {
             void autoFoldUses(editor);
         }),
-        vscode.workspace.onDidChangeTextDocument((event) => diagnostics.update(event.document)),
+        vscode.workspace.onDidChangeTextDocument((event) => diagnostics.scheduleUpdate(event.document)),
         vscode.workspace.onDidCloseTextDocument((document) => diagnostics.clear(document.uri)),
         vscode.workspace.onWillSaveTextDocument((event) => {
             if (event.document.languageId !== 'php') {

@@ -138,6 +138,13 @@
           "default": true,
           "scope": "resource",
           "description": "Report unused imports."
+        },
+        "phpImportHelper.diagnostics.debounceMs": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "scope": "resource",
+          "description": "Delay diagnostics refresh after PHP document edits."
         }
       }
     },

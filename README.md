@@ -48,7 +48,8 @@ VS Code extension for PHP imports and namespaces. It resolves classes from the w
     "phpImportHelper.autoImportOnSave": false,
     "phpImportHelper.ignoreList": [],
     "phpImportHelper.highlightNotImported": true,
-    "phpImportHelper.highlightNotUsed": true
+    "phpImportHelper.highlightNotUsed": true,
+    "phpImportHelper.diagnostics.debounceMs": 300
 }
 ```
 

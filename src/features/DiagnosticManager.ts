@@ -8,12 +8,47 @@ import { getConfig, ignoredClasses } from '../utils/config';
 
 export class DiagnosticManager implements vscode.Disposable {
     private readonly collection = vscode.languages.createDiagnosticCollection('phpImportHelper');
+    private readonly pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly pendingDocuments = new Map<string, vscode.TextDocument>();
 
     public constructor(
         private readonly detector: PhpClassDetector,
         private readonly parser: DeclarationParser,
         private readonly cache: NamespaceCache
     ) {}
+
+    public scheduleUpdate(document: vscode.TextDocument): void {
+        if (document.languageId !== 'php') {
+            return;
+        }
+
+        const key = document.uri.toString();
+        const debounceMs = Math.max(
+            0,
+            getConfig(document.uri).get<number>('diagnostics.debounceMs', 300)
+        );
+        const existingTimer = this.pendingTimers.get(key);
+
+        if (existingTimer !== undefined) {
+            clearTimeout(existingTimer);
+        }
+
+        this.pendingDocuments.set(key, document);
+        this.pendingTimers.set(
+            key,
+            setTimeout(() => {
+                this.pendingTimers.delete(key);
+
+                const latestDocument = this.pendingDocuments.get(key);
+                if (latestDocument === undefined || latestDocument.version !== document.version) {
+                    return;
+                }
+
+                this.pendingDocuments.delete(key);
+                this.update(latestDocument);
+            }, debounceMs)
+        );
+    }
 
     public update(document: vscode.TextDocument): void {
         if (document.languageId !== 'php') {
@@ -97,11 +132,27 @@ export class DiagnosticManager implements vscode.Disposable {
     }
 
     public clear(uri: vscode.Uri): void {
+        this.cancelScheduledUpdate(uri.toString());
         this.collection.delete(uri);
     }
 
     public dispose(): void {
+        for (const key of this.pendingTimers.keys()) {
+            this.cancelScheduledUpdate(key);
+        }
+
         this.collection.dispose();
+    }
+
+    private cancelScheduledUpdate(key: string): void {
+        const timer = this.pendingTimers.get(key);
+
+        if (timer !== undefined) {
+            clearTimeout(timer);
+            this.pendingTimers.delete(key);
+        }
+
+        this.pendingDocuments.delete(key);
     }
 
     private isSameNamespace(namespace: string | null, className: string): boolean {
