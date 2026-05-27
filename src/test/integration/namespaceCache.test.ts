@@ -198,12 +198,13 @@ class ${className} {}
         await cache.initialize();
         events.length = 0;
 
-        await openWorkspaceFile(`cache-watch/${className}.php`, `<?php
+        const editor = await openWorkspaceFile(`cache-watch/${className}.php`, `<?php
 
 namespace App\\Models;
 
 class ${className} {}
 `);
+        (cache as unknown as CacheInternals).scheduleIndexFile(editor.document.uri);
         await wait(1500);
 
         assert.deepStrictEqual(events, [
