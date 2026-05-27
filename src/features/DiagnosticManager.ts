@@ -6,10 +6,15 @@ import type { PhpClassDetector } from '../core/PhpClassDetector';
 import { DiagnosticCode } from '../types';
 import { getConfig, ignoredClasses } from '../utils/config';
 
+type UpdateOptions = {
+    force?: boolean;
+};
+
 export class DiagnosticManager implements vscode.Disposable {
     private readonly collection = vscode.languages.createDiagnosticCollection('phpImportHelper');
     private readonly pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly pendingDocuments = new Map<string, vscode.TextDocument>();
+    private readonly lastAnalyzedVersions = new Map<string, number>();
 
     public constructor(
         private readonly detector: PhpClassDetector,
@@ -50,8 +55,13 @@ export class DiagnosticManager implements vscode.Disposable {
         );
     }
 
-    public update(document: vscode.TextDocument): void {
+    public update(document: vscode.TextDocument, options: UpdateOptions = {}): void {
         if (document.languageId !== 'php') {
+            return;
+        }
+
+        const key = document.uri.toString();
+        if (!options.force && this.lastAnalyzedVersions.get(key) === document.version) {
             return;
         }
 
@@ -129,10 +139,14 @@ export class DiagnosticManager implements vscode.Disposable {
         }
 
         this.collection.set(document.uri, diagnostics);
+        this.lastAnalyzedVersions.set(key, document.version);
     }
 
     public clear(uri: vscode.Uri): void {
-        this.cancelScheduledUpdate(uri.toString());
+        const key = uri.toString();
+
+        this.cancelScheduledUpdate(key);
+        this.lastAnalyzedVersions.delete(key);
         this.collection.delete(uri);
     }
 
@@ -141,6 +155,7 @@ export class DiagnosticManager implements vscode.Disposable {
             this.cancelScheduledUpdate(key);
         }
 
+        this.lastAnalyzedVersions.clear();
         this.collection.dispose();
     }
 

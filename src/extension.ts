@@ -35,7 +35,7 @@ export function activate(context: vscode.ExtensionContext): void {
     };
     const refreshVisibleDiagnostics = (): void => {
         for (const document of vscode.workspace.textDocuments) {
-            diagnostics.update(document);
+            diagnostics.update(document, { force: true });
         }
     };
 
@@ -57,7 +57,7 @@ export function activate(context: vscode.ExtensionContext): void {
             new UseFoldingRangeProvider()
         ),
         vscode.workspace.onDidOpenTextDocument((document) => {
-            diagnostics.update(document);
+            diagnostics.update(document, { force: true });
             void autoFoldUses(vscode.window.activeTextEditor);
         }),
         vscode.window.onDidChangeActiveTextEditor((editor) => {
@@ -98,7 +98,7 @@ export function activate(context: vscode.ExtensionContext): void {
     void cache.initialize();
 
     for (const document of vscode.workspace.textDocuments) {
-        diagnostics.update(document);
+        diagnostics.update(document, { force: true });
     }
 }
 

@@ -302,7 +302,14 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     parser: DeclarationParser,
     cache: NamespaceCache,
-    diagnostics: { update: (document: vscode.TextDocument) => void }
+    diagnostics: {
+        update: (
+            document: vscode.TextDocument,
+            options?: {
+                force?: boolean;
+            }
+        ) => void;
+    }
 ): void {
     const importManager = new ImportManager(parser);
     const sortManager = new SortManager(parser);
@@ -324,7 +331,7 @@ export function registerCommands(
                         : await vscode.workspace.openTextDocument(uri);
 
                 if (document !== undefined) {
-                    diagnostics.update(document);
+                    diagnostics.update(document, { force: true });
                 }
             }
         ),

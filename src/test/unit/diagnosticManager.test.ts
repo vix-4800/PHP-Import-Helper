@@ -99,6 +99,7 @@ function loadDiagnosticManager(vscodeStub: VscodeStub): typeof import('../../fea
 
     try {
         delete require.cache[require.resolve('../../features/DiagnosticManager')];
+        delete require.cache[require.resolve('../../utils/config')];
 
         return require('../../features/DiagnosticManager') as typeof import('../../features/DiagnosticManager');
     } finally {
@@ -107,6 +108,95 @@ function loadDiagnosticManager(vscodeStub: VscodeStub): typeof import('../../fea
 }
 
 suite('DiagnosticManager', () => {
+    test('skips repeated analysis for same version unless forced', () => {
+        const setCalls: Array<{ uri: TestUri; diagnostics: unknown[] }> = [];
+        let parseCalls = 0;
+        let detectCalls = 0;
+        let importUsageCalls = 0;
+        const vscodeStub: VscodeStub = {
+            languages: {
+                createDiagnosticCollection: () => ({
+                    set: (targetUri, diagnostics) => setCalls.push({ uri: targetUri, diagnostics }),
+                    delete: () => undefined,
+                    dispose: () => undefined,
+                }),
+            },
+            workspace: {
+                getConfiguration: () => ({
+                    get: <T>(_section: string, defaultValue: T) => defaultValue,
+                }),
+            },
+            Range: class Range {
+                public constructor(
+                    public readonly startLine: number,
+                    public readonly startCharacter: number,
+                    public readonly endLine: number,
+                    public readonly endCharacter: number
+                ) {}
+            },
+            Diagnostic: class Diagnostic {
+                public code?: string;
+                public source?: string;
+                public tags?: number[];
+
+                public constructor(
+                    public readonly range: unknown,
+                    public readonly message: string,
+                    public readonly severity: number
+                ) {}
+            },
+            DiagnosticSeverity: {
+                Warning: 0,
+                Hint: 1,
+            },
+            DiagnosticTag: {
+                Unnecessary: 1,
+            },
+        };
+        const { DiagnosticManager } = loadDiagnosticManager(vscodeStub);
+        const parser = {
+            parse: (_text: string) => {
+                parseCalls++;
+
+                return {
+                    namespace: null,
+                    useStatements: [],
+                    declaredClassNames: [],
+                };
+            },
+        } as unknown as DeclarationParser;
+        const detector = {
+            detectAllWithPositions: (_text: string) => {
+                detectCalls++;
+
+                return [];
+            },
+            detectImportUsages: (_text: string) => {
+                importUsageCalls++;
+
+                return [];
+            },
+        } as unknown as PhpClassDetector;
+        const manager = new DiagnosticManager(
+            detector,
+            parser,
+            cacheWith({})
+        );
+        const document = documentWithText(`<?php
+
+class Foo {}
+`, 3, uri('file:///workspace/Foo.php'));
+
+        manager.update(document as never);
+        manager.update(document as never);
+        manager.update(document as never, { force: true });
+
+        assert.strictEqual(parseCalls, 2);
+        assert.strictEqual(detectCalls, 2);
+        assert.strictEqual(importUsageCalls, 2);
+        assert.strictEqual(setCalls.length, 2);
+    });
+
     test('debounces rapid document changes and uses latest version', async () => {
         const setCalls: Array<{ uri: TestUri; diagnostics: unknown[] }> = [];
         const vscodeStub: VscodeStub = {
@@ -120,7 +210,7 @@ suite('DiagnosticManager', () => {
             workspace: {
                 getConfiguration: () => ({
                     get: <T>(section: string, defaultValue: T) =>
-                        section === 'diagnostics.debounceMs' ? (10 as T) : defaultValue,
+                        section === 'diagnostics.debounceMs' ? (0 as T) : defaultValue,
                 }),
             },
             Range: class Range {
@@ -179,7 +269,7 @@ class Foo {
 `, 2, targetUri) as never
         );
 
-        await wait(25);
+        await wait(20);
 
         assert.strictEqual(setCalls.length, 1);
         assert.strictEqual(setCalls[0]?.uri, targetUri);
@@ -200,7 +290,7 @@ class Foo {
             workspace: {
                 getConfiguration: () => ({
                     get: <T>(section: string, defaultValue: T) =>
-                        section === 'diagnostics.debounceMs' ? (10 as T) : defaultValue,
+                        section === 'diagnostics.debounceMs' ? (0 as T) : defaultValue,
                 }),
             },
             Range: class Range {
@@ -246,7 +336,7 @@ class Foo extends MissingClass {}
         );
         manager.clear(targetUri as never);
 
-        await wait(25);
+        await wait(20);
 
         assert.strictEqual(setCalls.length, 0);
         assert.deepStrictEqual(deleted, [targetUri]);
