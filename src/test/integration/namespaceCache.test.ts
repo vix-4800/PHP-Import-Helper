@@ -266,6 +266,63 @@ class ${secondClassName} {}
         cache.dispose();
     });
 
+    test('skips watched PHP files excluded by index settings', async () => {
+        const storage = storageUri(`excluded-watch-${Date.now()}`);
+        const className = `ExcludedWatchedUser${Date.now()}`;
+        const editor = await openWorkspaceFile(`vendor/${className}.php`, `<?php
+
+namespace Vendor\\Pkg;
+
+class ${className} {}
+`);
+        const cache = new NamespaceCache(storage);
+        const config = vscode.workspace.getConfiguration('phpImportHelper');
+        const previous = config.get<string[]>('index.exclude');
+        const events: CacheActivityEvent[] = [];
+        let updates = 0;
+
+        try {
+            await config.update('index.exclude', ['**/vendor/**'], vscode.ConfigurationTarget.Global);
+            cache.onDidChangeActivity((event) => events.push(event));
+            cache.onDidUpdate(() => updates++);
+
+            (cache as unknown as CacheInternals).scheduleIndexFile(editor.document.uri);
+            await wait(1500);
+
+            assert.deepStrictEqual(events, []);
+            assert.strictEqual(updates, 0);
+            assert.deepStrictEqual(cache.resolve(className), []);
+        } finally {
+            await config.update('index.exclude', previous, vscode.ConfigurationTarget.Global);
+            cache.dispose();
+        }
+    });
+
+    test('skips excluded PHP files during rebuild scan', async () => {
+        const storage = storageUri(`excluded-rebuild-${Date.now()}`);
+        const className = `ExcludedRebuildUser${Date.now()}`;
+        const editor = await openWorkspaceFile(`vendor/${className}.php`, `<?php
+
+namespace Vendor\\Pkg;
+
+class ${className} {}
+`);
+        const cache = new NamespaceCache(storage);
+        const config = vscode.workspace.getConfiguration('phpImportHelper');
+        const previous = config.get<string[]>('index.exclude');
+
+        try {
+            await config.update('index.exclude', ['**/vendor/**'], vscode.ConfigurationTarget.Global);
+            await cache.rebuild();
+
+            assert.ok(editor.document.uri.fsPath.includes('/vendor/') || editor.document.uri.fsPath.includes('\\vendor\\'));
+            assert.deepStrictEqual(cache.resolve(className), []);
+        } finally {
+            await config.update('index.exclude', previous, vscode.ConfigurationTarget.Global);
+            cache.dispose();
+        }
+    });
+
     test('ignores non-PHP files scheduled defensively', async () => {
         const storage = storageUri(`non-php-${Date.now()}`);
         const uri = vscode.Uri.joinPath(storage, 'README.md');

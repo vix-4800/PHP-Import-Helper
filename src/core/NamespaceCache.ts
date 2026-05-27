@@ -7,7 +7,12 @@ import type {
     CacheEntry,
     ResolvedNamespace,
 } from '../types';
-import { getConfig } from '../utils/config';
+import { indexExcludePatterns } from '../utils/config';
+import {
+    buildIndexExcludeGlob,
+    isWithinRoots,
+    shouldIncludePhpFile,
+} from '../utils/indexExcludes';
 
 export class NamespaceCache implements vscode.Disposable {
     private static readonly indexVersion = 1;
@@ -89,19 +94,6 @@ export class NamespaceCache implements vscode.Disposable {
         await this.initializePromise;
     }
 
-    private normalizeFsPath(fsPath: string): string {
-        const normalized = fsPath.replace(/\\/g, '/').replace(/\/+$/, '');
-        return /^[A-Za-z]:/.test(normalized) ? normalized.toLowerCase() : normalized;
-    }
-
-    private isWithinPath(parent: string, target: string): boolean {
-        const normalizedParent = this.normalizeFsPath(parent);
-        const normalizedTarget = this.normalizeFsPath(target);
-
-        return normalizedTarget === normalizedParent ||
-            normalizedTarget.startsWith(`${normalizedParent}/`);
-    }
-
     private async rebuildNow(fixtures?: CacheEntry[]): Promise<void> {
         if (fixtures !== undefined) {
             this.setEntries(fixtures);
@@ -112,11 +104,7 @@ export class NamespaceCache implements vscode.Disposable {
 
         this.index.clear();
         this.fileIndex.clear();
-
-        const files = await vscode.workspace.findFiles(
-            '**/*.php',
-            getConfig().get<string>('exclude', '**/node_modules/**')
-        );
+        const files = await this.findIndexedPhpFiles();
 
         await this.indexFiles(files);
 
@@ -272,10 +260,7 @@ export class NamespaceCache implements vscode.Disposable {
     }
 
     private async incrementalUpdate(): Promise<boolean> {
-        const files = await vscode.workspace.findFiles(
-            '**/*.php',
-            getConfig().get<string>('exclude', '**/node_modules/**')
-        );
+        const files = await this.findIndexedPhpFiles();
         const candidates = new Map<string, vscode.Uri>();
         const seen = new Set<string>();
         let changed = false;
@@ -330,6 +315,13 @@ export class NamespaceCache implements vscode.Disposable {
         return changed;
     }
 
+    private async findIndexedPhpFiles(): Promise<vscode.Uri[]> {
+        const coarseExclude = buildIndexExcludeGlob(indexExcludePatterns());
+        const files = await vscode.workspace.findFiles('**/*.php', coarseExclude);
+
+        return files.filter((uri) => this.shouldIndexWatchedUri(uri));
+    }
+
     private async mapInBatches<T, TResult>(
         items: T[],
         batchSize: number,
@@ -346,15 +338,12 @@ export class NamespaceCache implements vscode.Disposable {
     }
 
     private isInWorkspace(uri: vscode.Uri): boolean {
-        return vscode.workspace.workspaceFolders?.some((folder) =>
-            this.isWithinPath(folder.uri.fsPath, uri.fsPath)
-        ) ?? false;
+        return isWithinRoots(uri.fsPath, this.projectRoots());
     }
 
     private shouldIndexWatchedUri(uri: vscode.Uri): boolean {
         return uri.scheme === 'file' &&
-            uri.fsPath.endsWith('.php') &&
-            this.isKnownProjectFile(uri);
+            shouldIncludePhpFile(uri.fsPath, this.projectRoots(), indexExcludePatterns(uri));
     }
 
     private shouldRefreshPersistedFile(uri: vscode.Uri): boolean {
@@ -362,12 +351,17 @@ export class NamespaceCache implements vscode.Disposable {
             return false;
         }
 
-        return this.isKnownProjectFile(uri);
+        return shouldIncludePhpFile(uri.fsPath, this.projectRoots(), indexExcludePatterns(uri));
     }
 
-    private isKnownProjectFile(uri: vscode.Uri): boolean {
-        return this.isInWorkspace(uri) ||
-            this.isWithinPath(process.cwd(), uri.fsPath);
+    private projectRoots(): string[] {
+        const roots = new Set(
+            (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath)
+        );
+
+        roots.add(process.cwd());
+
+        return [...roots];
     }
 
     private async loadPersistedIndex(): Promise<boolean> {

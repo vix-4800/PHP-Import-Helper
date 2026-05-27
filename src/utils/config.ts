@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { SortMode } from '../types';
+import { defaultIndexExcludePatterns } from './indexExcludes';
 
 export function getConfig(resource?: vscode.Uri): vscode.WorkspaceConfiguration {
     return vscode.workspace.getConfiguration('phpImportHelper', resource);
@@ -15,4 +16,8 @@ export function leadingSeparator(resource?: vscode.Uri): boolean {
 
 export function ignoredClasses(resource?: vscode.Uri): string[] {
     return getConfig(resource).get<string[]>('ignoreList', []);
+}
+
+export function indexExcludePatterns(resource?: vscode.Uri): string[] {
+    return getConfig(resource).get<string[]>('index.exclude', defaultIndexExcludePatterns);
 }

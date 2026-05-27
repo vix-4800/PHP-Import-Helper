@@ -65,11 +65,22 @@
       "type": "object",
       "title": "PHP Import Helper",
       "properties": {
-        "phpImportHelper.exclude": {
-          "type": "string",
-          "default": "**/node_modules/**",
+        "phpImportHelper.index.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/.git/**",
+            "**/node_modules/**",
+            "**/vendor/**",
+            "**/var/cache/**",
+            "**/runtime/**",
+            "**/storage/framework/**",
+            "**/bootstrap/cache/**"
+          ],
           "scope": "resource",
-          "description": "Glob pattern to exclude while finding PHP files."
+          "description": "Glob patterns excluded from PHP indexing and workspace class file search."
         },
         "phpImportHelper.autoSort": {
           "type": "boolean",

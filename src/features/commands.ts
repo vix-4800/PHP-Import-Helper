@@ -16,7 +16,14 @@ import { UseFoldingRangeCalculator } from '../core/UseFoldingRangeCalculator';
 import { parseAutoload } from '../core/composer';
 import type { CacheEntry, ResolvedNamespace } from '../types';
 import { parseClassTarget, type ClassTarget } from './commandTargets';
-import { getConfig, ignoredClasses, leadingSeparator, sortMode } from '../utils/config';
+import {
+    getConfig,
+    ignoredClasses,
+    indexExcludePatterns,
+    leadingSeparator,
+    sortMode,
+} from '../utils/config';
+import { buildIndexExcludeGlob, shouldIncludePhpFile } from '../utils/indexExcludes';
 
 function isSameNamespaceReference(
     namespace: string | null,
@@ -169,17 +176,24 @@ async function chooseResolved(
 function createNamespaceResolver(cache: NamespaceCache): NamespaceResolver {
     return new NamespaceResolver(cache, {
         findClassFiles: async (className, activeUri) => {
-            const exclude = getConfig(
-                activeUri === undefined ? undefined : vscode.Uri.file(activeUri.fsPath)
-            ).get<string>('exclude', '**/node_modules/**');
+            const resource = activeUri === undefined ? undefined : vscode.Uri.file(activeUri.fsPath);
+            const excludePatterns = indexExcludePatterns(resource);
+            const exclude = buildIndexExcludeGlob(excludePatterns);
             const folder = activeUri === undefined
                 ? undefined
                 : vscode.workspace.getWorkspaceFolder(vscode.Uri.file(activeUri.fsPath));
             const pattern = folder === undefined
                 ? `**/${className}.php`
                 : new vscode.RelativePattern(folder, `**/${className}.php`);
+            const roots = folder === undefined
+                ? [
+                    ...(vscode.workspace.workspaceFolders ?? []).map((item) => item.uri.fsPath),
+                    process.cwd(),
+                ]
+                : [folder.uri.fsPath];
+            const files = await vscode.workspace.findFiles(pattern, exclude);
 
-            return await vscode.workspace.findFiles(pattern, exclude);
+            return files.filter((uri) => shouldIncludePhpFile(uri.fsPath, roots, excludePatterns));
         },
         readFile: async (uri) => Buffer.from(
             await vscode.workspace.fs.readFile(vscode.Uri.file(uri.fsPath))

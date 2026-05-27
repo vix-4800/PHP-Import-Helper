@@ -38,7 +38,15 @@ VS Code extension for PHP imports and namespaces. It resolves classes from the w
 
 ```jsonc
 {
-    "phpImportHelper.exclude": "**/node_modules/**",
+    "phpImportHelper.index.exclude": [
+        "**/.git/**",
+        "**/node_modules/**",
+        "**/vendor/**",
+        "**/var/cache/**",
+        "**/runtime/**",
+        "**/storage/framework/**",
+        "**/bootstrap/cache/**"
+    ],
     "phpImportHelper.autoSort": true,
     "phpImportHelper.autoFoldUses": false,
     "phpImportHelper.sortOnSave": false,
