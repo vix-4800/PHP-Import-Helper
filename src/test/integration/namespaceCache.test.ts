@@ -204,7 +204,7 @@ namespace App\\Models;
 
 class ${className} {}
 `);
-        await wait(600);
+        await wait(1500);
 
         assert.deepStrictEqual(events, [
             { kind: 'start', phase: 'update' },

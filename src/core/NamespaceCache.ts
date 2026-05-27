@@ -354,7 +354,7 @@ export class NamespaceCache implements vscode.Disposable {
     private shouldIndexWatchedUri(uri: vscode.Uri): boolean {
         return uri.scheme === 'file' &&
             uri.fsPath.endsWith('.php') &&
-            this.isInWorkspace(uri);
+            this.isKnownProjectFile(uri);
     }
 
     private shouldRefreshPersistedFile(uri: vscode.Uri): boolean {
@@ -362,10 +362,12 @@ export class NamespaceCache implements vscode.Disposable {
             return false;
         }
 
-        const currentDirectory = process.cwd();
+        return this.isKnownProjectFile(uri);
+    }
 
+    private isKnownProjectFile(uri: vscode.Uri): boolean {
         return this.isInWorkspace(uri) ||
-            this.isWithinPath(currentDirectory, uri.fsPath);
+            this.isWithinPath(process.cwd(), uri.fsPath);
     }
 
     private async loadPersistedIndex(): Promise<boolean> {
