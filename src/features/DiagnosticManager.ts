@@ -4,7 +4,7 @@ import type { DeclarationParser } from '../core/DeclarationParser';
 import type { NamespaceCache } from '../core/NamespaceCache';
 import type { PhpClassDetector } from '../core/PhpClassDetector';
 import type { PerformanceMonitor } from './PerformanceMonitor';
-import type { DocumentAnalysis } from '../types';
+import type { DetectedClassReference, DocumentAnalysis } from '../types';
 import { DiagnosticCode } from '../types';
 import { getConfig, ignoredClasses } from '../utils/config';
 
@@ -96,7 +96,7 @@ export class DiagnosticManager implements vscode.Disposable {
                     continue;
                 }
 
-                if (this.isSameNamespace(parsed.namespace, item.name)) {
+                if (this.isSameNamespaceReference(parsed.namespace, item)) {
                     continue;
                 }
 
@@ -205,13 +205,21 @@ export class DiagnosticManager implements vscode.Disposable {
         return analysis;
     }
 
-    private isSameNamespace(namespace: string | null, className: string): boolean {
+    private isSameNamespaceReference(
+        namespace: string | null,
+        reference: DetectedClassReference
+    ): boolean {
+        const resolved = this.cache.resolve(reference.name);
+
         if (namespace === null) {
-            return this.cache.resolve(className).some((item) => item.fqcn === className);
+            return resolved.some((item) => item.fqcn === reference.name);
         }
 
-        return this.cache
-            .resolve(className)
-            .some((item) => item.fqcn === `${namespace}\\${className}`);
+        const sameNamespaceFqcn = `${namespace}\\${reference.rawName}`;
+        if (resolved.some((item) => item.fqcn === sameNamespaceFqcn)) {
+            return true;
+        }
+
+        return !reference.fullyQualified && resolved.length === 0;
     }
 }

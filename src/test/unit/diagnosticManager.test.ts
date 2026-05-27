@@ -348,4 +348,142 @@ class Foo extends MissingClass {}
         assert.strictEqual(setCalls.length, 0);
         assert.deepStrictEqual(deleted, [targetUri]);
     });
+
+    test('does not report same-namespace short names when cache has no match', () => {
+        const setCalls: Array<{ uri: TestUri; diagnostics: unknown[] }> = [];
+        const vscodeStub: VscodeStub = {
+            languages: {
+                createDiagnosticCollection: () => ({
+                    set: (targetUri, diagnostics) => setCalls.push({ uri: targetUri, diagnostics }),
+                    delete: () => undefined,
+                    dispose: () => undefined,
+                }),
+            },
+            workspace: {
+                getConfiguration: () => ({
+                    get: <T>(_section: string, defaultValue: T) => defaultValue,
+                }),
+            },
+            Range: class Range {
+                public constructor(
+                    public readonly startLine: number,
+                    public readonly startCharacter: number,
+                    public readonly endLine: number,
+                    public readonly endCharacter: number
+                ) {}
+            },
+            Diagnostic: class Diagnostic {
+                public code?: string;
+                public source?: string;
+                public tags?: number[];
+
+                public constructor(
+                    public readonly range: unknown,
+                    public readonly message: string,
+                    public readonly severity: number
+                ) {}
+            },
+            DiagnosticSeverity: {
+                Warning: 0,
+                Hint: 1,
+            },
+            DiagnosticTag: {
+                Unnecessary: 1,
+            },
+        };
+        const { DiagnosticManager } = loadDiagnosticManager(vscodeStub);
+        const manager = new DiagnosticManager(
+            new PhpClassDetector(),
+            new DeclarationParser(),
+            cacheWith({})
+        );
+        const targetUri = uri('file:///workspace/_ide_helper.php');
+
+        manager.update(
+            documentWithText(`<?php
+
+namespace yii\\web;
+
+/**
+ * @property UrlManager $urlManager
+ * @property AssetManager $assetManager
+ * @property View $view
+ */
+class Application {}
+`, 1, targetUri) as never,
+            { force: true }
+        );
+
+        assert.strictEqual(setCalls.length, 1);
+        assert.strictEqual(setCalls[0]?.diagnostics.length, 0);
+    });
+
+    test('reports namespaced short names when only external cache matches exist', () => {
+        const setCalls: Array<{ uri: TestUri; diagnostics: unknown[] }> = [];
+        const vscodeStub: VscodeStub = {
+            languages: {
+                createDiagnosticCollection: () => ({
+                    set: (targetUri, diagnostics) => setCalls.push({ uri: targetUri, diagnostics }),
+                    delete: () => undefined,
+                    dispose: () => undefined,
+                }),
+            },
+            workspace: {
+                getConfiguration: () => ({
+                    get: <T>(_section: string, defaultValue: T) => defaultValue,
+                }),
+            },
+            Range: class Range {
+                public constructor(
+                    public readonly startLine: number,
+                    public readonly startCharacter: number,
+                    public readonly endLine: number,
+                    public readonly endCharacter: number
+                ) {}
+            },
+            Diagnostic: class Diagnostic {
+                public code?: string;
+                public source?: string;
+                public tags?: number[];
+
+                public constructor(
+                    public readonly range: unknown,
+                    public readonly message: string,
+                    public readonly severity: number
+                ) {}
+            },
+            DiagnosticSeverity: {
+                Warning: 0,
+                Hint: 1,
+            },
+            DiagnosticTag: {
+                Unnecessary: 1,
+            },
+        };
+        const { DiagnosticManager } = loadDiagnosticManager(vscodeStub);
+        const manager = new DiagnosticManager(
+            new PhpClassDetector(),
+            new DeclarationParser(),
+            cacheWith({
+                Request: [{ fqcn: 'Illuminate\\Http\\Request', source: 'vendor' }],
+            })
+        );
+        const targetUri = uri('file:///workspace/Controller.php');
+
+        manager.update(
+            documentWithText(`<?php
+
+namespace App\\Http;
+
+class Controller
+{
+    public function run(Request $request): void {}
+}
+`, 1, targetUri) as never,
+            { force: true }
+        );
+
+        assert.strictEqual(setCalls.length, 1);
+        assert.strictEqual(setCalls[0]?.diagnostics.length, 1);
+    });
 });
