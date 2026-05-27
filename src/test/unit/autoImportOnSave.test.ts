@@ -128,6 +128,37 @@ class Foo {
         assert.ok(text.includes('new cl()'));
     });
 
+    test('imports fully qualified runtime classes on save', () => {
+        const cache = cacheWith({});
+        const autoImport = new AutoImportOnSave(detector, parser, cache);
+
+        const text = autoImport.computeText(documentWithText(`<?php
+
+namespace backend\\controllers;
+
+use yii\\filters\\VerbFilter;
+
+class AccessRedditController
+{
+    public function behaviors()
+    {
+        return [
+            'access' => [
+                'class' => \\yii\\filters\\AccessControl::class,
+            ],
+            'verbs' => [
+                'class' => VerbFilter::class,
+            ],
+        ];
+    }
+}
+`));
+
+        assert.ok(text.includes('use yii\\filters\\AccessControl;'));
+        assert.ok(text.includes("'class' => AccessControl::class"));
+        assert.strictEqual((text.match(/yii\\filters\\AccessControl/g) ?? []).length, 1);
+    });
+
     test('imports fully qualified PHPDoc types on save', () => {
         const cache = cacheWith({});
         const autoImport = new AutoImportOnSave(detector, parser, cache);

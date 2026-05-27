@@ -10,6 +10,7 @@ import {
     findNearestComposerPath,
     generateNamespace,
 } from '../core/NamespaceGenerator';
+import { computeImportAllText } from '../core/importAllText';
 import { PhpClassDetector } from '../core/PhpClassDetector';
 import { SortManager } from '../core/SortManager';
 import { UseFoldingRangeCalculator } from '../core/UseFoldingRangeCalculator';
@@ -25,16 +26,6 @@ import {
     sortMode,
 } from '../utils/config';
 import { buildIndexExcludeGlob, shouldIncludePhpFile } from '../utils/indexExcludes';
-
-function isSameNamespaceReference(
-    namespace: string | null,
-    className: string,
-    resolved: ResolvedNamespace[]
-): boolean {
-    const expected = namespace === null ? className : `${namespace}\\${className}`;
-
-    return resolved.some((item) => item.fqcn === expected);
-}
 
 function activePhpEditor(): vscode.TextEditor | null {
     const editor = vscode.window.activeTextEditor;
@@ -527,41 +518,7 @@ export function registerCommands(
                 return;
             }
 
-            let text = editor.document.getText();
-            const parsed = parser.parse(text);
-            const imported = new Set(
-                parsed.useStatements
-                    .filter((item) => item.kind === 'class')
-                    .map((item) => item.className)
-            );
-            const detector = new PhpClassDetector();
-
-            for (const reference of detector.detectFullyQualifiedPhpDocReferences(text)) {
-                if (imported.has(reference.name)) {
-                    continue;
-                }
-
-                text = importManager.addImport(text, reference.rawName);
-                imported.add(reference.name);
-            }
-
-            for (const className of detector.detectAll(text)) {
-                if (imported.has(className)) {
-                    continue;
-                }
-
-                const resolved = cache.resolve(className);
-                if (isSameNamespaceReference(parsed.namespace, className, resolved)) {
-                    continue;
-                }
-
-                if (resolved.length === 1) {
-                    text = importManager.addImport(text, resolved[0].fqcn);
-                    imported.add(className);
-                }
-            }
-
-            text = importManager.replaceImportedFullyQualifiedClasses(text);
+            let text = computeImportAllText(editor.document.getText(), parser, new PhpClassDetector(), cache);
             text = sortWhenConfigured(text, editor.document.uri, sortManager);
             await replaceDocument(editor, text);
             diagnostics.update(editor.document);
