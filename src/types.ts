@@ -42,6 +42,13 @@ export interface DetectedClassReference extends DetectedClass {
     importCandidate?: boolean;
 }
 
+export interface DocumentAnalysis {
+    version: number;
+    parsed: ParseResult;
+    references: DetectedClassReference[];
+    importUsages: string[];
+}
+
 export interface ResolvedNamespace {
     fqcn: string;
     source: 'global' | 'project' | 'vendor';

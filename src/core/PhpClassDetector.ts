@@ -252,24 +252,17 @@ export class PhpClassDetector {
 
     public detectAll(text: string): string[] {
         return unique(
-            this.detectReferences(text)
-                .filter((item) => this.isImportCandidate(item))
+            this.filterImportCandidates(this.detectReferences(text))
                 .map((item) => item.name)
         );
     }
 
     public detectAllWithPositions(text: string): DetectedClassReference[] {
-        return this.uniqueReferences(
-            this.detectReferences(text).filter((item) => this.isImportCandidate(item))
-        );
+        return this.filterImportCandidates(this.detectReferences(text));
     }
 
     public detectImportUsages(text: string): string[] {
-        return unique(
-            this.detectReferences(text)
-                .map((item) => item.importName)
-                .filter((item): item is string => item !== null)
-        );
+        return this.extractImportUsages(this.detectReferences(text));
     }
 
     public detectFullyQualifiedReferences(text: string): DetectedClassReference[] {
@@ -357,6 +350,18 @@ export class PhpClassDetector {
         }
 
         return this.uniqueReferences(found);
+    }
+
+    public filterImportCandidates(references: readonly DetectedClassReference[]): DetectedClassReference[] {
+        return this.uniqueReferences(references.filter((item) => this.isImportCandidate(item)));
+    }
+
+    public extractImportUsages(references: readonly DetectedClassReference[]): string[] {
+        return unique(
+            references
+                .map((item) => item.importName)
+                .filter((item): item is string => item !== null)
+        );
     }
 
     private detectAstReferences(document: PhpAstDocument): DetectedClassReference[] {

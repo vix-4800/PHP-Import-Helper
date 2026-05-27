@@ -508,6 +508,30 @@ function actionCreate() {}
         ]);
     });
 
+    test('derives import candidates and usages from one reference pass', () => {
+        const text = `<?php
+
+use App\\Models\\User;
+
+class Foo extends Controller {
+    public function run(User $user): Response {
+        return new Response();
+    }
+}
+`;
+
+        const references = detector.detectReferences(text);
+
+        assert.deepStrictEqual(
+            detector.filterImportCandidates(references).map((item) => item.name).sort(),
+            ['Controller', 'Response', 'Response', 'User']
+        );
+        assert.deepStrictEqual(
+            detector.extractImportUsages(references).sort(),
+            ['Controller', 'Response', 'User']
+        );
+    });
+
     test('parses document once per detection pass', () => {
         class CountingParser extends PhpAstParser {
             public count = 0;

@@ -3,6 +3,7 @@ import { builtInClasses } from '../core/builtInClasses';
 import type { DeclarationParser } from '../core/DeclarationParser';
 import type { NamespaceCache } from '../core/NamespaceCache';
 import type { PhpClassDetector } from '../core/PhpClassDetector';
+import type { DocumentAnalysis } from '../types';
 import { DiagnosticCode } from '../types';
 import { getConfig, ignoredClasses } from '../utils/config';
 
@@ -15,6 +16,7 @@ export class DiagnosticManager implements vscode.Disposable {
     private readonly pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly pendingDocuments = new Map<string, vscode.TextDocument>();
     private readonly lastAnalyzedVersions = new Map<string, number>();
+    private readonly analysisCache = new Map<string, DocumentAnalysis>();
 
     public constructor(
         private readonly detector: PhpClassDetector,
@@ -67,17 +69,17 @@ export class DiagnosticManager implements vscode.Disposable {
 
         const config = getConfig(document.uri);
         const ignored = new Set(ignoredClasses(document.uri));
-        const text = document.getText();
-        const parsed = this.parser.parse(text);
+        const analysis = this.getDocumentAnalysis(document);
+        const parsed = analysis.parsed;
         const imported = new Set(
             parsed.useStatements
                 .filter((item) => item.kind === 'class')
                 .map((item) => item.className)
         );
         const declared = new Set(parsed.declaredClassNames);
-        const detected = this.detector.detectAllWithPositions(text);
+        const detected = this.detector.filterImportCandidates(analysis.references);
         const detectedNames = new Set(detected.map((item) => item.name));
-        const importUsages = new Set(this.detector.detectImportUsages(text));
+        const importUsages = new Set(analysis.importUsages);
         const diagnostics: vscode.Diagnostic[] = [];
 
         if (config.get<boolean>('highlightNotImported', true)) {
@@ -146,6 +148,7 @@ export class DiagnosticManager implements vscode.Disposable {
         const key = uri.toString();
 
         this.cancelScheduledUpdate(key);
+        this.analysisCache.delete(key);
         this.lastAnalyzedVersions.delete(key);
         this.collection.delete(uri);
     }
@@ -155,6 +158,7 @@ export class DiagnosticManager implements vscode.Disposable {
             this.cancelScheduledUpdate(key);
         }
 
+        this.analysisCache.clear();
         this.lastAnalyzedVersions.clear();
         this.collection.dispose();
     }
@@ -168,6 +172,28 @@ export class DiagnosticManager implements vscode.Disposable {
         }
 
         this.pendingDocuments.delete(key);
+    }
+
+    private getDocumentAnalysis(document: vscode.TextDocument): DocumentAnalysis {
+        const key = document.uri.toString();
+        const cached = this.analysisCache.get(key);
+
+        if (cached !== undefined && cached.version === document.version) {
+            return cached;
+        }
+
+        const text = document.getText();
+        const references = this.detector.detectReferences(text);
+        const analysis: DocumentAnalysis = {
+            version: document.version,
+            parsed: this.parser.parse(text),
+            references,
+            importUsages: this.detector.extractImportUsages(references),
+        };
+
+        this.analysisCache.set(key, analysis);
+
+        return analysis;
     }
 
     private isSameNamespace(namespace: string | null, className: string): boolean {

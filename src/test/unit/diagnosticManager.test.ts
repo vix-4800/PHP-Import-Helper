@@ -108,10 +108,11 @@ function loadDiagnosticManager(vscodeStub: VscodeStub): typeof import('../../fea
 }
 
 suite('DiagnosticManager', () => {
-    test('skips repeated analysis for same version unless forced', () => {
+    test('skips repeated analysis for same version and reuses cached analysis when forced', () => {
         const setCalls: Array<{ uri: TestUri; diagnostics: unknown[] }> = [];
         let parseCalls = 0;
-        let detectCalls = 0;
+        let detectReferenceCalls = 0;
+        let filterImportCandidateCalls = 0;
         let importUsageCalls = 0;
         const vscodeStub: VscodeStub = {
             languages: {
@@ -166,12 +167,17 @@ suite('DiagnosticManager', () => {
             },
         } as unknown as DeclarationParser;
         const detector = {
-            detectAllWithPositions: (_text: string) => {
-                detectCalls++;
+            detectReferences: (_text: string) => {
+                detectReferenceCalls++;
 
                 return [];
             },
-            detectImportUsages: (_text: string) => {
+            filterImportCandidates: (_references: unknown[]) => {
+                filterImportCandidateCalls++;
+
+                return [];
+            },
+            extractImportUsages: (_references: unknown[]) => {
                 importUsageCalls++;
 
                 return [];
@@ -191,9 +197,10 @@ class Foo {}
         manager.update(document as never);
         manager.update(document as never, { force: true });
 
-        assert.strictEqual(parseCalls, 2);
-        assert.strictEqual(detectCalls, 2);
-        assert.strictEqual(importUsageCalls, 2);
+        assert.strictEqual(parseCalls, 1);
+        assert.strictEqual(detectReferenceCalls, 1);
+        assert.strictEqual(filterImportCandidateCalls, 2);
+        assert.strictEqual(importUsageCalls, 1);
         assert.strictEqual(setCalls.length, 2);
     });
 
