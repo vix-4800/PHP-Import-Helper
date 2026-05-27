@@ -45,7 +45,24 @@ function relativePathFromRoots(fsPath: string, roots: readonly string[]): string
 }
 
 function matchesExcludePattern(relativePath: string, excludePatterns: readonly string[]): boolean {
-    return excludePatterns.some((pattern) => path.matchesGlob(relativePath, pattern));
+    return excludePatterns.some((pattern) => {
+        if (path.matchesGlob(relativePath, pattern)) {
+            return true;
+        }
+
+        if (!pattern.startsWith('**/')) {
+            return false;
+        }
+
+        const segments = relativePath.split('/');
+        for (let index = 1; index < segments.length; index++) {
+            if (path.matchesGlob(segments.slice(index).join('/'), pattern)) {
+                return true;
+            }
+        }
+
+        return false;
+    });
 }
 
 export function shouldIncludePhpFile(

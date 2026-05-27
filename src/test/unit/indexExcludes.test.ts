@@ -28,6 +28,14 @@ suite('index excludes', () => {
         );
         assert.strictEqual(
             shouldIncludePhpFile(
+                '/workspace/.vscode-test/fixtures/default/vendor/User.php',
+                ['/workspace'],
+                defaultIndexExcludePatterns
+            ),
+            false
+        );
+        assert.strictEqual(
+            shouldIncludePhpFile(
                 '/workspace/storage/framework/cache/data.php',
                 ['/workspace'],
                 defaultIndexExcludePatterns
