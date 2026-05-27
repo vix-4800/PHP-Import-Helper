@@ -11,6 +11,7 @@ import { foldUsesInEditor, registerCommands } from './features/commands';
 import { DiagnosticManager } from './features/DiagnosticManager';
 import { computeSaveHookText } from './features/saveHooks';
 import { UseFoldingRangeProvider } from './features/UseFoldingRangeProvider';
+import { getVisiblePhpDocuments } from './features/visiblePhpDocuments';
 import { getConfig, ignoredClasses, sortMode } from './utils/config';
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -34,7 +35,7 @@ export function activate(context: vscode.ExtensionContext): void {
         await foldUsesInEditor(editor);
     };
     const refreshVisibleDiagnostics = (): void => {
-        for (const document of vscode.workspace.textDocuments) {
+        for (const document of getVisiblePhpDocuments(vscode.window.visibleTextEditors)) {
             diagnostics.update(document, { force: true });
         }
     };
@@ -97,7 +98,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerCommands(context, parser, cache, diagnostics);
     void cache.initialize();
 
-    for (const document of vscode.workspace.textDocuments) {
+    for (const document of getVisiblePhpDocuments(vscode.window.visibleTextEditors)) {
         diagnostics.update(document, { force: true });
     }
 }
