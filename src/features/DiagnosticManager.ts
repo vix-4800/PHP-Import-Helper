@@ -3,6 +3,7 @@ import { builtInClasses } from '../core/builtInClasses';
 import type { DeclarationParser } from '../core/DeclarationParser';
 import type { NamespaceCache } from '../core/NamespaceCache';
 import type { PhpClassDetector } from '../core/PhpClassDetector';
+import type { PerformanceMonitor } from './PerformanceMonitor';
 import type { DocumentAnalysis } from '../types';
 import { DiagnosticCode } from '../types';
 import { getConfig, ignoredClasses } from '../utils/config';
@@ -21,7 +22,8 @@ export class DiagnosticManager implements vscode.Disposable {
     public constructor(
         private readonly detector: PhpClassDetector,
         private readonly parser: DeclarationParser,
-        private readonly cache: NamespaceCache
+        private readonly cache: NamespaceCache,
+        private readonly performance?: PerformanceMonitor
     ) {}
 
     public scheduleUpdate(document: vscode.TextDocument): void {
@@ -62,6 +64,7 @@ export class DiagnosticManager implements vscode.Disposable {
             return;
         }
 
+        const startedAt = Date.now();
         const key = document.uri.toString();
         if (!options.force && this.lastAnalyzedVersions.get(key) === document.version) {
             return;
@@ -142,8 +145,14 @@ export class DiagnosticManager implements vscode.Disposable {
 
         this.collection.set(document.uri, diagnostics);
         this.lastAnalyzedVersions.set(key, document.version);
+        this.performance?.recordDiagnosticsUpdate({
+            fileName: document.fileName.split(/[\\/]/).pop() ?? document.fileName,
+            version: document.version,
+            ms: Date.now() - startedAt,
+            refs: detected.length,
+            trace: getConfig(document.uri).get<boolean>('performance.trace', false),
+        });
     }
-
     public clear(uri: vscode.Uri): void {
         const key = uri.toString();
 

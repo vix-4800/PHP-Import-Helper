@@ -9,6 +9,7 @@ import { CacheStatusBarController } from './features/CacheStatusBarController';
 import { PhpCodeActionProvider } from './features/CodeActionProvider';
 import { foldUsesInEditor, registerCommands } from './features/commands';
 import { DiagnosticManager } from './features/DiagnosticManager';
+import { PerformanceMonitor } from './features/PerformanceMonitor';
 import { computeSaveHookText } from './features/saveHooks';
 import { UseFoldingRangeProvider } from './features/UseFoldingRangeProvider';
 import { getVisiblePhpDocuments } from './features/visiblePhpDocuments';
@@ -17,8 +18,10 @@ import { getConfig, ignoredClasses, sortMode } from './utils/config';
 export function activate(context: vscode.ExtensionContext): void {
     const parser = new DeclarationParser();
     const detector = new PhpClassDetector();
-    const cache = new NamespaceCache(context.storageUri);
-    const diagnostics = new DiagnosticManager(detector, parser, cache);
+    const performanceChannel = vscode.window.createOutputChannel('PHP Import Helper Performance');
+    const performance = new PerformanceMonitor(performanceChannel);
+    const cache = new NamespaceCache(context.storageUri, performance);
+    const diagnostics = new DiagnosticManager(detector, parser, cache, performance);
     const importManager = new ImportManager(parser);
     const sortManager = new SortManager(parser);
     const autoImport = new AutoImportOnSave(detector, parser, cache);
@@ -42,6 +45,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         cache,
+        performanceChannel,
         cacheStatusItem,
         cache.onDidChangeActivity((event) => cacheStatus.handleActivity(event)),
         cache.onDidUpdate(refreshVisibleDiagnostics),
@@ -95,7 +99,7 @@ export function activate(context: vscode.ExtensionContext): void {
         })
     );
 
-    registerCommands(context, parser, cache, diagnostics);
+    registerCommands(context, parser, cache, diagnostics, performance);
     void cache.initialize();
 
     for (const document of getVisiblePhpDocuments(vscode.window.visibleTextEditors)) {

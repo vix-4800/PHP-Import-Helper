@@ -33,6 +33,7 @@ VS Code extension for PHP imports and namespaces. It resolves classes from the w
 | `phpImportHelper.removeUnused` | Remove Unused Imports |
 | `phpImportHelper.generateNamespace` | Generate Namespace |
 | `phpImportHelper.rebuildIndex` | Rebuild Namespace Index |
+| `phpImportHelper.showPerformanceStats` | Show Performance Stats |
 
 ## Settings
 
@@ -57,7 +58,8 @@ VS Code extension for PHP imports and namespaces. It resolves classes from the w
     "phpImportHelper.ignoreList": [],
     "phpImportHelper.highlightNotImported": true,
     "phpImportHelper.highlightNotUsed": true,
-    "phpImportHelper.diagnostics.debounceMs": 300
+    "phpImportHelper.diagnostics.debounceMs": 300,
+    "phpImportHelper.performance.trace": false
 }
 ```
 

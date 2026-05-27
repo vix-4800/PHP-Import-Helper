@@ -156,6 +156,12 @@
           "minimum": 0,
           "scope": "resource",
           "description": "Delay diagnostics refresh after PHP document edits."
+        },
+        "phpImportHelper.performance.trace": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "Write diagnostics and index timing traces to the performance output channel."
         }
       }
     },
@@ -199,6 +205,11 @@
         "command": "phpImportHelper.rebuildIndex",
         "title": "Rebuild Namespace Index",
         "category": "PHP Import Helper"
+      },
+      {
+        "command": "phpImportHelper.showPerformanceStats",
+        "title": "Show Performance Stats",
+        "category": "PHP Import Helper"
       }
     ],
     "menus": {
@@ -237,6 +248,11 @@
           "when": "resourceLangId == php",
           "command": "phpImportHelper.generateNamespace",
           "group": "0_php_import_helper@7"
+        },
+        {
+          "when": "resourceLangId == php",
+          "command": "phpImportHelper.showPerformanceStats",
+          "group": "0_php_import_helper@8"
         }
       ]
     },

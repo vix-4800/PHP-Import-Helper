@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
 import { NamespaceIndex } from './NamespaceIndex';
 import { NamespaceCacheUpdateQueue } from './NamespaceCacheUpdateQueue';
+import type { PerformanceMonitor } from '../features/PerformanceMonitor';
 import type {
     CacheActivityEvent,
     CacheActivityPhase,
     CacheEntry,
+    IndexStats,
     ResolvedNamespace,
 } from '../types';
 import { indexExcludePatterns } from '../utils/config';
@@ -34,11 +36,15 @@ export class NamespaceCache implements vscode.Disposable {
     private initializePromise: Promise<void> | null = null;
     private updateActivityActive = false;
     private processingUpdate = false;
+    private lastRebuildDurationMs: number | null = null;
 
     public readonly onDidUpdate = this.onDidUpdateEmitter.event;
     public readonly onDidChangeActivity = this.onDidChangeActivityEmitter.event;
 
-    public constructor(private readonly storageUri?: vscode.Uri) {
+    public constructor(
+        private readonly storageUri?: vscode.Uri,
+        private readonly performance?: PerformanceMonitor
+    ) {
         this.updateQueue = new NamespaceCacheUpdateQueue((uri) => this.shouldIndexWatchedUri(uri));
     }
 
@@ -81,9 +87,14 @@ export class NamespaceCache implements vscode.Disposable {
             await this.initializePromise;
         }
 
+        const startedAt = Date.now();
         await this.runActivity('rebuild', async () => {
             await this.rebuildNow(fixtures);
         });
+        const durationMs = Date.now() - startedAt;
+
+        this.lastRebuildDurationMs = durationMs;
+        this.performance?.recordRebuildDuration(durationMs);
     }
 
     public async initialize(): Promise<void> {
@@ -142,7 +153,22 @@ export class NamespaceCache implements vscode.Disposable {
         this.onDidChangeActivityEmitter.dispose();
     }
 
+    public indexStats(): IndexStats {
+        let indexedClasses = 0;
+        for (const file of this.fileIndex.values()) {
+            indexedClasses += file.entries.length;
+        }
+
+        return {
+            indexedFiles: this.fileIndex.size,
+            indexedClasses,
+        };
+    }
+
     private scheduleIndexFile(uri: vscode.Uri): void {
+        this.performance?.recordWatcherEvent({
+            ignored: !this.shouldIndexWatchedUri(uri),
+        });
         if (!this.updateQueue.addChanged(uri)) {
             return;
         }
@@ -151,6 +177,9 @@ export class NamespaceCache implements vscode.Disposable {
     }
 
     private scheduleRemoveFile(uri: vscode.Uri): void {
+        this.performance?.recordWatcherEvent({
+            ignored: !this.shouldIndexWatchedUri(uri),
+        });
         if (!this.updateQueue.addDeleted(uri)) {
             return;
         }
@@ -179,27 +208,51 @@ export class NamespaceCache implements vscode.Disposable {
             return;
         }
 
+        const startedAt = Date.now();
         this.processingUpdate = true;
         let changed = false;
+        let changedCount = 0;
+        let deletedCount = 0;
+        let readMs = 0;
+        let parseMs = 0;
+        let persistMs = 0;
 
         try {
             while (this.updateQueue.size > 0) {
                 const batch = this.updateQueue.consume();
+                changedCount += batch.changed.length;
+                deletedCount += batch.deleted.length;
 
                 for (const uri of batch.deleted) {
                     this.removeFile(uri);
                 }
 
-                await this.indexFiles(batch.changed);
+                const metrics = await this.indexFiles(batch.changed);
+                readMs += metrics.readMs;
+                parseMs += metrics.parseMs;
                 changed = changed || batch.changed.length > 0 || batch.deleted.length > 0;
             }
 
             if (changed) {
+                const persistStartedAt = Date.now();
                 await this.persistIndex();
+                persistMs += Date.now() - persistStartedAt;
                 this.onDidUpdateEmitter.fire();
             }
         } finally {
             this.processingUpdate = false;
+
+            if (changed) {
+                this.performance?.recordIndexBatch({
+                    changed: changedCount,
+                    deleted: deletedCount,
+                    readMs,
+                    parseMs,
+                    persistMs,
+                    durationMs: Date.now() - startedAt,
+                    trace: vscode.workspace.getConfiguration('phpImportHelper').get<boolean>('performance.trace', false),
+                });
+            }
 
             if (this.updateQueue.size > 0) {
                 this.scheduleQueuedUpdate();
@@ -226,14 +279,18 @@ export class NamespaceCache implements vscode.Disposable {
         }
     }
 
-    private async indexFile(uri: vscode.Uri): Promise<void> {
+    private async indexFile(uri: vscode.Uri): Promise<{ readMs: number; parseMs: number }> {
         try {
+            const readStartedAt = Date.now();
             const [raw, stat] = await Promise.all([
                 vscode.workspace.fs.readFile(uri),
                 vscode.workspace.fs.stat(uri),
             ]);
+            const readMs = Date.now() - readStartedAt;
             const text = Buffer.from(raw).toString('utf8');
+            const parseStartedAt = Date.now();
             const entries = NamespaceIndex.entriesFromPhpFile(uri, text);
+            const parseMs = Date.now() - parseStartedAt;
 
             this.index.replaceFile(uri, entries as CacheEntry[]);
             this.fileIndex.set(uri.toString(), {
@@ -243,8 +300,11 @@ export class NamespaceCache implements vscode.Disposable {
                     fqcn: entry.fqcn,
                 })),
             });
+
+            return { readMs, parseMs };
         } catch {
             this.removeFile(uri);
+            return { readMs: 0, parseMs: 0 };
         }
     }
 
@@ -253,10 +313,18 @@ export class NamespaceCache implements vscode.Disposable {
         this.fileIndex.delete(uri.toString());
     }
 
-    private async indexFiles(uris: vscode.Uri[]): Promise<void> {
-        await this.mapInBatches(uris, NamespaceCache.fileBatchSize, async (uri) => {
-            await this.indexFile(uri);
+    private async indexFiles(uris: vscode.Uri[]): Promise<{ readMs: number; parseMs: number }> {
+        const results = await this.mapInBatches(uris, NamespaceCache.fileBatchSize, async (uri) => {
+            return await this.indexFile(uri);
         });
+
+        return results.reduce(
+            (totals, item) => ({
+                readMs: totals.readMs + item.readMs,
+                parseMs: totals.parseMs + item.parseMs,
+            }),
+            { readMs: 0, parseMs: 0 }
+        );
     }
 
     private async incrementalUpdate(): Promise<boolean> {
@@ -448,10 +516,18 @@ export class NamespaceCache implements vscode.Disposable {
         }
 
         const indexUri = vscode.Uri.joinPath(this.storageUri, NamespaceCache.indexFileName);
-        await vscode.workspace.fs.createDirectory(this.storageUri);
-        await vscode.workspace.fs.writeFile(indexUri, Buffer.from(JSON.stringify({
+        const encoded = Buffer.from(JSON.stringify({
             version: NamespaceCache.indexVersion,
             files,
-        }), 'utf8'));
+        }), 'utf8');
+        const startedAt = Date.now();
+        await vscode.workspace.fs.createDirectory(this.storageUri);
+        await vscode.workspace.fs.writeFile(indexUri, encoded);
+        this.performance?.recordCachePersist({
+            files: this.fileIndex.size,
+            bytes: encoded.byteLength,
+            ms: Date.now() - startedAt,
+            trace: vscode.workspace.getConfiguration('phpImportHelper').get<boolean>('performance.trace', false),
+        });
     }
 }

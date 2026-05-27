@@ -14,6 +14,7 @@ import { PhpClassDetector } from '../core/PhpClassDetector';
 import { SortManager } from '../core/SortManager';
 import { UseFoldingRangeCalculator } from '../core/UseFoldingRangeCalculator';
 import { parseAutoload } from '../core/composer';
+import { PerformanceMonitor } from './PerformanceMonitor';
 import type { CacheEntry, ResolvedNamespace } from '../types';
 import { parseClassTarget, type ClassTarget } from './commandTargets';
 import {
@@ -315,7 +316,7 @@ export async function foldUsesInEditor(editor: vscode.TextEditor): Promise<void>
 export function registerCommands(
     context: vscode.ExtensionContext,
     parser: DeclarationParser,
-    cache: NamespaceCache,
+    cache: NamespaceCache & { indexStats: () => { indexedFiles: number; indexedClasses: number } },
     diagnostics: {
         update: (
             document: vscode.TextDocument,
@@ -323,7 +324,8 @@ export function registerCommands(
                 force?: boolean;
             }
         ) => void;
-    }
+    },
+    performance: PerformanceMonitor
 ): void {
     const importManager = new ImportManager(parser);
     const sortManager = new SortManager(parser);
@@ -350,6 +352,9 @@ export function registerCommands(
                 }
             }
         ),
+        vscode.commands.registerCommand('phpImportHelper.showPerformanceStats', async () => {
+            performance.showStats(performance.snapshot(cache.indexStats()));
+        }),
         vscode.commands.registerCommand('phpImportHelper.sort', async () => {
             const editor = activePhpEditor();
             if (editor === null) {

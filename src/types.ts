@@ -68,6 +68,11 @@ export interface CacheActivityEvent {
     phase: CacheActivityPhase;
 }
 
+export interface IndexStats {
+    indexedFiles: number;
+    indexedClasses: number;
+}
+
 export enum DiagnosticCode {
     ClassNotImported = 'phpImportHelper.classNotImported',
     ClassNotUsed = 'phpImportHelper.classNotUsed',
