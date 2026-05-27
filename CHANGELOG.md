@@ -10,7 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed `Import All Classes` and `autoImportOnSave` so fully qualified runtime class references are imported and shortened correctly.
-- Fixed false "Class is not imported" diagnostics for short class names that already belong to the current file namespace.
 
 ## [0.1.0] - 2026-05-28
 
