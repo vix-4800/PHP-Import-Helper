@@ -5,6 +5,7 @@ import { NamespaceCache } from './core/NamespaceCache';
 import { PhpClassDetector } from './core/PhpClassDetector';
 import { SortManager } from './core/SortManager';
 import { AutoImportOnSave } from './features/AutoImportOnSave';
+import { CacheStatusBarController } from './features/CacheStatusBarController';
 import { PhpCodeActionProvider } from './features/CodeActionProvider';
 import { foldUsesInEditor, registerCommands } from './features/commands';
 import { DiagnosticManager } from './features/DiagnosticManager';
@@ -20,6 +21,8 @@ export function activate(context: vscode.ExtensionContext): void {
     const importManager = new ImportManager(parser);
     const sortManager = new SortManager(parser);
     const autoImport = new AutoImportOnSave(detector, parser, cache);
+    const cacheStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    const cacheStatus = new CacheStatusBarController(cacheStatusItem);
     const autoFoldUses = async (editor: vscode.TextEditor | undefined): Promise<void> => {
         if (
             editor?.document.languageId !== 'php' ||
@@ -38,6 +41,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         cache,
+        cacheStatusItem,
+        cache.onDidChangeActivity((event) => cacheStatus.handleActivity(event)),
         cache.onDidUpdate(refreshVisibleDiagnostics),
         diagnostics,
         vscode.languages.registerCodeActionsProvider(

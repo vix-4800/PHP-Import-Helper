@@ -54,6 +54,13 @@ export interface CacheEntry {
     uri: vscode.Uri;
 }
 
+export type CacheActivityPhase = 'initialize' | 'rebuild' | 'update';
+
+export interface CacheActivityEvent {
+    kind: 'start' | 'end';
+    phase: CacheActivityPhase;
+}
+
 export enum DiagnosticCode {
     ClassNotImported = 'phpImportHelper.classNotImported',
     ClassNotUsed = 'phpImportHelper.classNotUsed',

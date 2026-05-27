@@ -1,6 +1,11 @@
 import * as vscode from 'vscode';
 import { NamespaceIndex } from './NamespaceIndex';
-import type { CacheEntry, ResolvedNamespace } from '../types';
+import type {
+    CacheActivityEvent,
+    CacheActivityPhase,
+    CacheEntry,
+    ResolvedNamespace,
+} from '../types';
 import { getConfig } from '../utils/config';
 
 export class NamespaceCache implements vscode.Disposable {
@@ -15,9 +20,12 @@ export class NamespaceCache implements vscode.Disposable {
     private watcher: vscode.FileSystemWatcher | null = null;
     private readonly updateTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly onDidUpdateEmitter = new vscode.EventEmitter<void>();
+    private readonly onDidChangeActivityEmitter = new vscode.EventEmitter<CacheActivityEvent>();
     private initializePromise: Promise<void> | null = null;
+    private readonly scheduledUpdateStates = new Map<string, 'scheduled' | 'processing'>();
 
     public readonly onDidUpdate = this.onDidUpdateEmitter.event;
+    public readonly onDidChangeActivity = this.onDidChangeActivityEmitter.event;
 
     public constructor(private readonly storageUri?: vscode.Uri) {}
 
@@ -60,11 +68,15 @@ export class NamespaceCache implements vscode.Disposable {
             await this.initializePromise;
         }
 
-        await this.rebuildNow(fixtures);
+        await this.runActivity('rebuild', async () => {
+            await this.rebuildNow(fixtures);
+        });
     }
 
     public async initialize(): Promise<void> {
-        this.initializePromise ??= this.initializeNow();
+        this.initializePromise ??= this.runActivity('initialize', async () => {
+            await this.initializeNow();
+        });
 
         await this.initializePromise;
     }
@@ -134,9 +146,11 @@ export class NamespaceCache implements vscode.Disposable {
             clearTimeout(timer);
         }
         this.updateTimers.clear();
+        this.scheduledUpdateStates.clear();
 
         this.watcher?.dispose();
         this.onDidUpdateEmitter.dispose();
+        this.onDidChangeActivityEmitter.dispose();
     }
 
     private scheduleIndexFile(uri: vscode.Uri): void {
@@ -144,15 +158,44 @@ export class NamespaceCache implements vscode.Disposable {
         const existingTimer = this.updateTimers.get(key);
         if (existingTimer !== undefined) {
             clearTimeout(existingTimer);
+        } else {
+            if (this.scheduledUpdateStates.size === 0) {
+                this.onDidChangeActivityEmitter.fire({ kind: 'start', phase: 'update' });
+            }
+            this.scheduledUpdateStates.set(key, 'scheduled');
         }
 
         this.updateTimers.set(key, setTimeout(() => {
             this.updateTimers.delete(key);
+            this.scheduledUpdateStates.set(key, 'processing');
             void this.indexFile(uri).then(async () => {
                 await this.persistIndex();
                 this.onDidUpdateEmitter.fire();
+            }).finally(() => {
+                if (this.updateTimers.has(key)) {
+                    this.scheduledUpdateStates.set(key, 'scheduled');
+                    return;
+                }
+
+                this.scheduledUpdateStates.delete(key);
+                if (this.scheduledUpdateStates.size === 0) {
+                    this.onDidChangeActivityEmitter.fire({ kind: 'end', phase: 'update' });
+                }
             });
         }, 250));
+    }
+
+    private async runActivity<T>(
+        phase: CacheActivityPhase,
+        operation: () => Promise<T>
+    ): Promise<T> {
+        this.onDidChangeActivityEmitter.fire({ kind: 'start', phase });
+
+        try {
+            return await operation();
+        } finally {
+            this.onDidChangeActivityEmitter.fire({ kind: 'end', phase });
+        }
     }
 
     private async indexFile(uri: vscode.Uri): Promise<void> {
