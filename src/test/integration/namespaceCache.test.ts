@@ -8,6 +8,11 @@ type CacheActivityEvent = {
     phase: 'initialize' | 'rebuild' | 'update';
 };
 
+type CacheInternals = {
+    persistIndex: () => Promise<void>;
+    scheduleIndexFile: (uri: vscode.Uri) => void;
+};
+
 function storageUri(name: string): vscode.Uri {
     return vscode.Uri.joinPath(
         vscode.Uri.file(process.cwd()),
@@ -142,6 +147,46 @@ class ${className} {}
         cache.dispose();
     });
 
+    test('does not persist loaded index when PHP mtimes are unchanged', async () => {
+        const storage = storageUri(`fresh-${Date.now()}`);
+        const indexUri = vscode.Uri.joinPath(storage, 'namespace-index.json');
+        const className = `FreshUser${Date.now()}`;
+        const editor = await openWorkspaceFile(`cache-fresh/${className}.php`, `<?php
+
+namespace App\\Models;
+
+class ${className} {}
+`);
+        const fileUri = editor.document.uri;
+        const stat = await vscode.workspace.fs.stat(fileUri);
+        const cache = new NamespaceCache(storage);
+        let persists = 0;
+
+        await vscode.workspace.fs.createDirectory(storage);
+        await vscode.workspace.fs.writeFile(indexUri, Buffer.from(JSON.stringify({
+            version: 1,
+            files: {
+                [fileUri.toString()]: {
+                    mtime: stat.mtime,
+                    entries: [{ className, fqcn: `App\\Models\\${className}` }],
+                },
+            },
+        }), 'utf8'));
+
+        (cache as unknown as CacheInternals).persistIndex = async () => {
+            persists++;
+        };
+
+        await cache.initialize();
+
+        assert.strictEqual(persists, 0);
+        assert.deepStrictEqual(cache.resolve(className).map((item) => item.fqcn), [
+            `App\\Models\\${className}`,
+        ]);
+
+        cache.dispose();
+    });
+
     test('emits update activity for watched file changes', async () => {
         const storage = storageUri(`watch-${Date.now()}`);
         const className = `WatchedUser${Date.now()}`;
@@ -168,6 +213,73 @@ class ${className} {}
         assert.deepStrictEqual(cache.resolve(className).map((item) => item.fqcn), [
             `App\\Models\\${className}`,
         ]);
+
+        cache.dispose();
+    });
+
+    test('batches watched PHP file changes into one update and persist', async () => {
+        const storage = storageUri(`batch-${Date.now()}`);
+        const firstClassName = `FirstWatchedUser${Date.now()}`;
+        const secondClassName = `SecondWatchedUser${Date.now()}`;
+        const first = await openWorkspaceFile(`cache-batch/${firstClassName}.php`, `<?php
+
+namespace App\\Models;
+
+class ${firstClassName} {}
+`);
+        const second = await openWorkspaceFile(`cache-batch/${secondClassName}.php`, `<?php
+
+namespace App\\Models;
+
+class ${secondClassName} {}
+`);
+        const cache = new NamespaceCache(storage);
+        const internals = cache as unknown as CacheInternals;
+        const events: CacheActivityEvent[] = [];
+        let updates = 0;
+        let persists = 0;
+
+        internals.persistIndex = async () => {
+            persists++;
+        };
+        cache.onDidChangeActivity((event) => events.push(event));
+        cache.onDidUpdate(() => updates++);
+
+        internals.scheduleIndexFile(first.document.uri);
+        internals.scheduleIndexFile(second.document.uri);
+        await wait(1500);
+
+        assert.deepStrictEqual(events, [
+            { kind: 'start', phase: 'update' },
+            { kind: 'end', phase: 'update' },
+        ]);
+        assert.strictEqual(updates, 1);
+        assert.strictEqual(persists, 1);
+        assert.deepStrictEqual(cache.resolve(firstClassName).map((item) => item.fqcn), [
+            `App\\Models\\${firstClassName}`,
+        ]);
+        assert.deepStrictEqual(cache.resolve(secondClassName).map((item) => item.fqcn), [
+            `App\\Models\\${secondClassName}`,
+        ]);
+
+        cache.dispose();
+    });
+
+    test('ignores non-PHP files scheduled defensively', async () => {
+        const storage = storageUri(`non-php-${Date.now()}`);
+        const uri = vscode.Uri.joinPath(storage, 'README.md');
+        const cache = new NamespaceCache(storage);
+        const events: CacheActivityEvent[] = [];
+        let updates = 0;
+
+        cache.onDidChangeActivity((event) => events.push(event));
+        cache.onDidUpdate(() => updates++);
+
+        (cache as unknown as CacheInternals).scheduleIndexFile(uri);
+        await wait(1500);
+
+        assert.deepStrictEqual(events, []);
+        assert.strictEqual(updates, 0);
 
         cache.dispose();
     });
