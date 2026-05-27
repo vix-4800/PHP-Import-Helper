@@ -1,9 +1,9 @@
-export type NamespaceCacheUpdateBatch<TUri> = {
+export interface NamespaceCacheUpdateBatch<TUri> {
     changed: TUri[];
     deleted: TUri[];
-};
+}
 
-export class NamespaceCacheUpdateQueue<TUri extends { toString(): string }> {
+export class NamespaceCacheUpdateQueue<TUri extends { toString: () => string }> {
     private readonly changed = new Map<string, TUri>();
     private readonly deleted = new Map<string, TUri>();
 

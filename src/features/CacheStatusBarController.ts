@@ -3,9 +3,9 @@ import type { CacheActivityEvent, CacheActivityPhase } from '../types';
 
 export interface StatusBarItemLike {
     text: string;
-    tooltip?: string | vscode.MarkdownString;
-    show(): void;
-    hide(): void;
+    tooltip?: vscode.MarkdownString | string;
+    show: () => void;
+    hide: () => void;
 }
 
 function activityLabel(phase: CacheActivityPhase): { label: string; tooltip: string } {

@@ -108,7 +108,7 @@ function phpDocLines(text: string): PhpDocLine[] {
 }
 
 function tagAt(line: PhpDocLine): { tag: string; body: string; index: number } | null {
-    if (line.content[0] !== '@') {
+    if (!line.content.startsWith('@')) {
         return null;
     }
 
@@ -145,7 +145,7 @@ export function parsePhpDocTags(text: string): PhpDocTag[] {
             continue;
         }
 
-        if (line.content[0] === '@') {
+        if (line.content.startsWith('@')) {
             current = null;
             continue;
         }

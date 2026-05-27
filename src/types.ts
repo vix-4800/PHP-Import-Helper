@@ -57,7 +57,7 @@ export interface CacheEntry {
 export type CacheActivityPhase = 'initialize' | 'rebuild' | 'update';
 
 export interface CacheActivityEvent {
-    kind: 'start' | 'end';
+    kind: 'end' | 'start';
     phase: CacheActivityPhase;
 }
 
