@@ -2,6 +2,29 @@ import * as assert from 'assert';
 import { NamespaceResolver } from '../../core/NamespaceResolver';
 
 suite('NamespaceResolver', () => {
+    test('caches negative fallback lookups until cleared', async () => {
+        let findCalls = 0;
+        const resolver = new NamespaceResolver(
+            { resolve: () => [] },
+            {
+                findClassFiles: async () => {
+                    findCalls++;
+                    return [];
+                },
+                readFile: async () => '',
+            }
+        );
+
+        assert.deepStrictEqual(await resolver.resolve('MissingThing'), []);
+        assert.deepStrictEqual(await resolver.resolve('MissingThing'), []);
+        assert.strictEqual(findCalls, 1);
+
+        resolver.clearNegativeLookups();
+
+        assert.deepStrictEqual(await resolver.resolve('MissingThing'), []);
+        assert.strictEqual(findCalls, 2);
+    });
+
     test('uses workspace file search on cache miss', async () => {
         const resolver = new NamespaceResolver(
             { resolve: () => [] },

@@ -15,11 +15,22 @@ interface NamespaceResolverWorkspace {
     readFile: (uri: UriLike) => Promise<string>;
 }
 
+type NegativeLookup = {
+    time: number;
+};
+
 export class NamespaceResolver {
+    private static readonly negativeLookupTtlMs = 60_000;
+    private readonly negativeLookupCache = new Map<string, NegativeLookup>();
+
     public constructor(
         private readonly cache: CacheLike,
         private readonly workspace: NamespaceResolverWorkspace
     ) {}
+
+    public clearNegativeLookups(): void {
+        this.negativeLookupCache.clear();
+    }
 
     public async resolve(className: string, activeUri?: UriLike): Promise<ResolvedNamespace[]> {
         if (builtInClasses.has(className)) {
@@ -33,6 +44,16 @@ export class NamespaceResolver {
         const cached = this.cache.resolve(className);
         if (cached.length > 0) {
             return cached;
+        }
+
+        const cacheKey = this.negativeLookupKey(className, activeUri);
+        const negativeLookup = this.negativeLookupCache.get(cacheKey);
+
+        if (
+            negativeLookup !== undefined &&
+            Date.now() - negativeLookup.time < NamespaceResolver.negativeLookupTtlMs
+        ) {
+            return [];
         }
 
         const files = await this.workspace.findClassFiles(className, activeUri);
@@ -65,7 +86,17 @@ export class NamespaceResolver {
             }
         }
 
+        if (resolved.length === 0) {
+            this.negativeLookupCache.set(cacheKey, { time: Date.now() });
+        } else {
+            this.negativeLookupCache.delete(cacheKey);
+        }
+
         return resolved;
+    }
+
+    private negativeLookupKey(className: string, activeUri?: UriLike): string {
+        return `${activeUri?.fsPath ?? ''}::${className}`;
     }
 
     private basename(filePath: string): string {

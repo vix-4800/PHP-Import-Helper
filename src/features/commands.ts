@@ -330,6 +330,7 @@ export function registerCommands(
     const resolver = createNamespaceResolver(cache);
 
     context.subscriptions.push(
+        cache.onDidUpdate(() => resolver.clearNegativeLookups()),
         vscode.commands.registerCommand(
             'phpImportHelper.rebuildIndex',
             async (fixtures?: CacheEntry[]) => {
