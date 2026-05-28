@@ -173,6 +173,38 @@ class Foo {
         assert.ok(!text.includes('use App\\Models\\Post;'));
     });
 
+    test('keeps duplicate imports when duplicate cleanup is disabled', () => {
+        const text = manager.removeUnused(`<?php
+
+use App\\Models\\User;
+use App\\Models\\User;
+
+class Foo {
+    public function user(User $user): User {
+        return $user;
+    }
+}
+`);
+
+        assert.strictEqual((text.match(/use App\\Models\\User;/g) ?? []).length, 2);
+    });
+
+    test('removes duplicate imports when duplicate cleanup is enabled', () => {
+        const text = manager.removeUnused(`<?php
+
+use App\\Models\\User;
+use App\\Models\\User;
+
+class Foo {
+    public function user(User $user): User {
+        return $user;
+    }
+}
+`, [], true);
+
+        assert.strictEqual((text.match(/use App\\Models\\User;/g) ?? []).length, 1);
+    });
+
     test('removes only unused entries from grouped imports', () => {
         const text = manager.removeUnused(`<?php
 

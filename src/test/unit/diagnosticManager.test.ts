@@ -46,6 +46,7 @@ type VscodeStub = {
         tags?: number[];
     };
     DiagnosticSeverity: {
+        Error: number;
         Warning: number;
         Hint: number;
     };
@@ -147,6 +148,7 @@ suite('DiagnosticManager', () => {
                 ) {}
             },
             DiagnosticSeverity: {
+                Error: 0,
                 Warning: 0,
                 Hint: 1,
             },
@@ -240,6 +242,7 @@ class Foo {}
                 ) {}
             },
             DiagnosticSeverity: {
+                Error: 0,
                 Warning: 0,
                 Hint: 1,
             },
@@ -320,6 +323,7 @@ class Foo {
                 ) {}
             },
             DiagnosticSeverity: {
+                Error: 0,
                 Warning: 0,
                 Hint: 1,
             },
@@ -347,5 +351,96 @@ class Foo extends MissingClass {}
 
         assert.strictEqual(setCalls.length, 0);
         assert.deepStrictEqual(deleted, [targetUri]);
+    });
+
+    test('reports duplicate imports as errors', () => {
+        const setCalls: Array<{
+            uri: TestUri;
+            diagnostics: Array<{ code?: string; message: string; severity: number }>;
+        }> = [];
+        const vscodeStub: VscodeStub = {
+            languages: {
+                createDiagnosticCollection: () => ({
+                    set: (targetUri, diagnostics) =>
+                        setCalls.push({
+                            uri: targetUri,
+                            diagnostics: diagnostics as Array<{
+                                code?: string;
+                                message: string;
+                                severity: number;
+                            }>,
+                        }),
+                    delete: () => undefined,
+                    dispose: () => undefined,
+                }),
+            },
+            workspace: {
+                getConfiguration: () => ({
+                    get: <T>(_section: string, defaultValue: T) => defaultValue,
+                }),
+            },
+            Range: class Range {
+                public constructor(
+                    public readonly startLine: number,
+                    public readonly startCharacter: number,
+                    public readonly endLine: number,
+                    public readonly endCharacter: number
+                ) {}
+            },
+            Diagnostic: class Diagnostic {
+                public code?: string;
+                public source?: string;
+                public tags?: number[];
+
+                public constructor(
+                    public readonly range: unknown,
+                    public readonly message: string,
+                    public readonly severity: number
+                ) {}
+            },
+            DiagnosticSeverity: {
+                Error: 0,
+                Warning: 1,
+                Hint: 2,
+            },
+            DiagnosticTag: {
+                Unnecessary: 1,
+            },
+        };
+        const { DiagnosticManager } = loadDiagnosticManager(vscodeStub);
+        const manager = new DiagnosticManager(
+            new PhpClassDetector(),
+            new DeclarationParser(),
+            cacheWith({})
+        );
+        const targetUri = uri('file:///workspace/Foo.php');
+
+        manager.update(
+            documentWithText(`<?php
+
+use App\\Models\\User;
+use App\\Models\\User;
+
+class Foo {
+    public function user(User $user): User {
+        return $user;
+    }
+}
+`, 1, targetUri) as never
+        );
+
+        assert.strictEqual(setCalls.length, 1);
+        assert.deepStrictEqual(
+            setCalls[0]?.diagnostics.map((item) => ({
+                code: item.code,
+                message: item.message,
+                severity: item.severity,
+            })),
+            [{
+                code: 'phpImportHelper.duplicateImport',
+                message: "Import 'App\\Models\\User' is duplicated.",
+                severity: 0,
+            }]
+        );
     });
 });
