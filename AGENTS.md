@@ -22,6 +22,7 @@ This repository is a bundled VS Code extension for PHP import management. It imp
 - Keep changes local to requested behaviour.
 - Do not add abstractions for future flexibility.
 - If user-visible command/config behaviour changes, update `package.json`, README, and tests.
+- After new features or updates, always update `CHANGELOG.md`.
 
 ## Code Style
 
