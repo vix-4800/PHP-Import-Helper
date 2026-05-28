@@ -18,6 +18,10 @@ export function ignoredClasses(resource?: vscode.Uri): string[] {
     return getConfig(resource).get<string[]>('ignoreList', []);
 }
 
+export function removeDuplicateImports(resource?: vscode.Uri): boolean {
+    return getConfig(resource).get<boolean>('removeDuplicateImports', false);
+}
+
 export function indexExcludePatterns(resource?: vscode.Uri): string[] {
     return getConfig(resource).get<string[]>('index.exclude', defaultIndexExcludePatterns);
 }

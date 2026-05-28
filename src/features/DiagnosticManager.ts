@@ -84,6 +84,30 @@ export class DiagnosticManager implements vscode.Disposable {
         const detectedNames = new Set(detected.map((item) => item.name));
         const importUsages = new Set(analysis.importUsages);
         const diagnostics: vscode.Diagnostic[] = [];
+        const seenImports = new Set<string>();
+
+        for (const statement of parsed.useStatements.filter((item) => item.kind === 'class')) {
+            const importKey = `${statement.kind}:${statement.fqcn}:${statement.alias ?? ''}`;
+            if (!seenImports.has(importKey)) {
+                seenImports.add(importKey);
+                continue;
+            }
+
+            const range = new vscode.Range(
+                statement.line - 1,
+                0,
+                statement.line - 1,
+                statement.text.length
+            );
+            const diagnostic = new vscode.Diagnostic(
+                range,
+                `Import '${statement.fqcn}' is duplicated.`,
+                vscode.DiagnosticSeverity.Error
+            );
+            diagnostic.code = DiagnosticCode.DuplicateImport;
+            diagnostic.source = 'PHP Import Helper';
+            diagnostics.push(diagnostic);
+        }
 
         if (config.get<boolean>('highlightNotImported', true)) {
             for (const item of detected) {

@@ -123,6 +123,12 @@
           "scope": "resource",
           "description": "Remove unused imports on save."
         },
+        "phpImportHelper.removeDuplicateImports": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "Remove duplicate class imports when cleaning imports."
+        },
         "phpImportHelper.autoImportOnSave": {
           "type": "boolean",
           "default": false,

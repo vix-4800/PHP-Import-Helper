@@ -13,7 +13,7 @@ import { PerformanceMonitor } from './features/PerformanceMonitor';
 import { computeSaveHookText } from './features/saveHooks';
 import { UseFoldingRangeProvider } from './features/UseFoldingRangeProvider';
 import { getVisiblePhpDocuments } from './features/visiblePhpDocuments';
-import { getConfig, ignoredClasses, sortMode } from './utils/config';
+import { getConfig, ignoredClasses, removeDuplicateImports, sortMode } from './utils/config';
 
 export function activate(context: vscode.ExtensionContext): void {
     const parser = new DeclarationParser();
@@ -85,7 +85,12 @@ export function activate(context: vscode.ExtensionContext): void {
                 ignoredClasses: ignoredClasses(event.document.uri),
             }, {
                 autoImportText: (value) => autoImport.computeTextForText(value),
-                removeUnusedText: (value, ignored) => importManager.removeUnused(value, ignored),
+                removeUnusedText: (value, ignored) =>
+                    importManager.removeUnused(
+                        value,
+                        ignored,
+                        removeDuplicateImports(event.document.uri)
+                    ),
                 sortText: (value, mode) => sortManager.sortText(value, mode),
             });
 

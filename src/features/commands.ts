@@ -23,6 +23,7 @@ import {
     ignoredClasses,
     indexExcludePatterns,
     leadingSeparator,
+    removeDuplicateImports,
     sortMode,
 } from '../utils/config';
 import { buildIndexExcludeGlob, shouldIncludePhpFile } from '../utils/indexExcludes';
@@ -367,7 +368,8 @@ export function registerCommands(
                 editor,
                 importManager.removeUnused(
                     editor.document.getText(),
-                    ignoredClasses(editor.document.uri)
+                    ignoredClasses(editor.document.uri),
+                    removeDuplicateImports(editor.document.uri)
                 )
             );
             diagnostics.update(editor.document);

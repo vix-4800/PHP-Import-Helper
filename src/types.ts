@@ -76,6 +76,7 @@ export interface IndexStats {
 export enum DiagnosticCode {
     ClassNotImported = 'phpImportHelper.classNotImported',
     ClassNotUsed = 'phpImportHelper.classNotUsed',
+    DuplicateImport = 'phpImportHelper.duplicateImport',
 }
 
 export interface InsertPosition {

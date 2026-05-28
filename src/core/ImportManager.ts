@@ -69,13 +69,18 @@ export class ImportManager {
         return result;
     }
 
-    public removeUnused(text: string, ignoredClassNames: string[] = []): string {
+    public removeUnused(
+        text: string,
+        ignoredClassNames: string[] = [],
+        removeDuplicateImports = false
+    ): string {
         const parsed = this.parser.parse(text);
         const detected = new Set(this.detector.detectImportUsages(text));
         const ignored = new Set(ignoredClassNames);
         const lines = text.split(/\r?\n/);
         const replacements = new Map<number, { endLine: number; text: string }>();
         const handledRanges = new Set<string>();
+        const seenImports = new Set<string>();
 
         for (const statement of parsed.useStatements.filter((item) => item.kind === 'class')) {
             const rangeKey = `${statement.line}:${statement.endLine}`;
@@ -90,9 +95,22 @@ export class ImportManager {
                     item.endLine === statement.endLine &&
                     item.kind === 'class'
             );
-            const kept = siblings.filter((item) =>
-                ignored.has(item.className) || this.isUsed(detected, item)
-            );
+            const kept = siblings
+                .filter((item) => ignored.has(item.className) || this.isUsed(detected, item))
+                .filter((item) => {
+                    if (!removeDuplicateImports) {
+                        return true;
+                    }
+
+                    const importKey = `${item.kind}:${item.fqcn}:${item.alias ?? ''}`;
+                    if (seenImports.has(importKey)) {
+                        return false;
+                    }
+
+                    seenImports.add(importKey);
+
+                    return true;
+                });
 
             if (kept.length === siblings.length) {
                 continue;
