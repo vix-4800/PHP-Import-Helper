@@ -108,6 +108,63 @@ function loadDiagnosticManager(vscodeStub: VscodeStub): typeof import('../../fea
     }
 }
 
+function diagnosticVscodeStub(
+    setCalls: Array<{
+        uri: TestUri;
+        diagnostics: Array<{ code?: string; message: string; severity: number }>;
+    }>
+): VscodeStub {
+    return {
+        languages: {
+            createDiagnosticCollection: () => ({
+                set: (targetUri, diagnostics) =>
+                    setCalls.push({
+                        uri: targetUri,
+                        diagnostics: diagnostics as Array<{
+                            code?: string;
+                            message: string;
+                            severity: number;
+                        }>,
+                    }),
+                delete: () => undefined,
+                dispose: () => undefined,
+            }),
+        },
+        workspace: {
+            getConfiguration: () => ({
+                get: <T>(_section: string, defaultValue: T) => defaultValue,
+            }),
+        },
+        Range: class Range {
+            public constructor(
+                public readonly startLine: number,
+                public readonly startCharacter: number,
+                public readonly endLine: number,
+                public readonly endCharacter: number
+            ) {}
+        },
+        Diagnostic: class Diagnostic {
+            public code?: string;
+            public source?: string;
+            public tags?: number[];
+
+            public constructor(
+                public readonly range: unknown,
+                public readonly message: string,
+                public readonly severity: number
+            ) {}
+        },
+        DiagnosticSeverity: {
+            Error: 0,
+            Warning: 1,
+            Hint: 2,
+        },
+        DiagnosticTag: {
+            Unnecessary: 1,
+        },
+    };
+}
+
 suite('DiagnosticManager', () => {
     test('skips repeated analysis for same version and reuses cached analysis when forced', () => {
         const setCalls: Array<{ uri: TestUri; diagnostics: unknown[] }> = [];
@@ -524,5 +581,62 @@ exit($application->run());
 
         assert.strictEqual(setCalls.length, 1);
         assert.deepStrictEqual(setCalls[0]?.diagnostics, []);
+    });
+
+    test('does not report PHPDoc descriptions or unqualified global static calls without namespace', () => {
+        const setCalls: Array<{
+            uri: TestUri;
+            diagnostics: Array<{ code?: string; message: string; severity: number }>;
+        }> = [];
+        const { DiagnosticManager } = loadDiagnosticManager(diagnosticVscodeStub(setCalls));
+        const manager = new DiagnosticManager(
+            new PhpClassDetector(),
+            new DeclarationParser(),
+            cacheWith({})
+        );
+        const documentText = `<?php
+
+use App\\Contracts\\Factory;
+use App\\Contracts\\FactoryBuilder;
+use App\\Models\\User;
+
+if (!function_exists('factory')) {
+    /**
+     * @param mixed ...$arguments Arguments passed to factory
+     *
+     * @return FactoryBuilder
+     */
+    function factory(mixed ...$arguments): FactoryBuilder
+    {
+        $factory = GlobalFacade::createObject(Factory::class);
+
+        return $factory->of($arguments[0]);
+    }
+}
+
+if (!function_exists('current_user')) {
+    /**
+     * @return User Current user
+     */
+    function current_user(): User
+    {
+        if (!GlobalFacade::$app->has('user')) {
+            throw new RuntimeException('User component is not available.');
+        }
+
+        return GlobalFacade::$app->user->identity;
+    }
+}
+`;
+
+        for (const targetUri of [
+            uri('file:///workspace/bootstrap.php'),
+            uri('file:///workspace/functions/runtime.php'),
+        ]) {
+            manager.update(documentWithText(documentText, 1, targetUri) as never);
+        }
+
+        assert.strictEqual(setCalls.length, 2);
+        assert.deepStrictEqual(setCalls.map((item) => item.diagnostics), [[], []]);
     });
 });
