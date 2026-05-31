@@ -196,40 +196,21 @@ class ${className} {}
 
     test('does not persist loaded index when PHP mtimes are unchanged', async () => {
         const storage = storageUri(`fresh-${Date.now()}`);
-        const indexUri = vscode.Uri.joinPath(storage, 'namespace-index.json');
         const className = `FreshUser${Date.now()}`;
-        const composerUri = await ensureComposerFixture('src/cache-fresh/');
-        const editor = await openWorkspaceFile(`src/cache-fresh/${className}.php`, `<?php
+        await ensureComposerFixture('src/cache-fresh/');
+        await openWorkspaceFile(`src/cache-fresh/${className}.php`, `<?php
 
 namespace App\\Models;
 
 class ${className} {}
 `);
-        const fileUri = editor.document.uri;
-        const stat = await vscode.workspace.fs.stat(fileUri);
-        const composerStat = await vscode.workspace.fs.stat(composerUri);
+        const first = new NamespaceCache(storage);
+
+        await first.rebuild();
+        first.dispose();
+
         const cache = new NamespaceCache(storage);
         let persists = 0;
-
-        await vscode.workspace.fs.createDirectory(storage);
-        await vscode.workspace.fs.writeFile(indexUri, Buffer.from(JSON.stringify({
-            version: 2,
-            files: {
-                [fileUri.toString()]: {
-                    mtime: stat.mtime,
-                    entries: [{
-                        className,
-                        fqcn: `App\\Models\\${className}`,
-                        uri: fileUri.toString(),
-                    }],
-                },
-            },
-            dependencies: {
-                [composerUri.toString()]: {
-                    mtime: composerStat.mtime,
-                },
-            },
-        }), 'utf8'));
 
         (cache as unknown as CacheInternals).persistIndex = async () => {
             persists++;
@@ -300,6 +281,8 @@ class ${secondClassName} {}
         const events: CacheActivityEvent[] = [];
         let updates = 0;
         let persists = 0;
+
+        await cache.initialize();
 
         internals.persistIndex = async () => {
             persists++;
