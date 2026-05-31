@@ -19,7 +19,7 @@ VS Code extension for PHP imports and namespaces. It resolves classes from the w
 - Remove unused class imports while preserving PHPDoc-only usages, aliases, traits, and namespace-prefix usages.
 - Generate namespaces from the nearest `composer.json` PSR-4/PSR-0 mapping.
 - Highlight unimported classes and unused imports with quick fixes.
-- Cache namespace indexes on activation and update them through PHP file watchers.
+- Cache namespace indexes from Composer autoload roots and generated vendor class maps.
 
 ## Commands
 
@@ -63,6 +63,14 @@ VS Code extension for PHP imports and namespaces. It resolves classes from the w
     "phpImportHelper.performance.trace": false
 }
 ```
+
+## Indexing
+
+PHP Import Helper builds its namespace index from Composer metadata when a workspace has `composer.json`.
+Project classes are scanned from `autoload` and `autoload-dev` PSR-4, PSR-0, and classmap roots instead of every PHP file in the workspace.
+Vendor classes are read from Composer-generated `vendor/composer/autoload_classmap.php` and `vendor/composer/autoload_static.php` files.
+
+Composer PSR-4 vendor mappings are not treated as a complete class index. For full vendor coverage, run Composer with optimized autoload/classmap output, for example `composer dump-autoload -o`. If a class is not in the index, import resolution still falls back to searching `**/<ClassName>.php` inside the active workspace folder.
 
 ## Development
 
