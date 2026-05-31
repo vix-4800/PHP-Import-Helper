@@ -48,6 +48,54 @@ class Request {}
         ]);
     });
 
+    test('passes active URI to fallback workspace search', async () => {
+        const activeUri = { fsPath: '/workspace/packages/blog/src/Post.php' };
+        const seenActiveUris: Array<{ fsPath: string } | undefined> = [];
+        const resolver = new NamespaceResolver(
+            { resolve: () => [] },
+            {
+                findClassFiles: async (_className, active) => {
+                    seenActiveUris.push(active);
+                    return [];
+                },
+                readFile: async () => '',
+            }
+        );
+
+        await resolver.resolve('MissingPost', activeUri);
+
+        assert.deepStrictEqual(seenActiveUris, [activeUri]);
+    });
+
+    test('clearNegativeLookups allows a later fallback hit for the same class', async () => {
+        let files: Array<{ fsPath: string }> = [];
+        const resolver = new NamespaceResolver(
+            { resolve: () => [] },
+            {
+                findClassFiles: async () => files,
+                readFile: async () => `<?php
+
+namespace App\\Models;
+
+class User {}
+`,
+            }
+        );
+
+        assert.deepStrictEqual(await resolver.resolve('User'), []);
+
+        files = [{ fsPath: '/workspace/app/Models/User.php' }];
+        resolver.clearNegativeLookups();
+
+        assert.deepStrictEqual(await resolver.resolve('User'), [
+            {
+                fqcn: 'App\\Models\\User',
+                source: 'project',
+                uri: { fsPath: '/workspace/app/Models/User.php' },
+            },
+        ]);
+    });
+
     test('returns global class candidate from matching file without namespace', async () => {
         const resolver = new NamespaceResolver(
             { resolve: () => [] },

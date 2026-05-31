@@ -53,6 +53,47 @@ suite('composer autoload', () => {
         ]);
     });
 
+    test('parses classmap paths from autoload and autoload-dev', () => {
+        const autoload = parseAutoload({
+            autoload: { classmap: ['database/seeders/', 'legacy/'] },
+            'autoload-dev': { classmap: 'tests/Fixtures/' },
+        });
+
+        assert.deepStrictEqual(autoload.classmap, [
+            'database/seeders',
+            'legacy',
+            'tests/Fixtures',
+        ]);
+    });
+
+    test('resolves relative autoload paths from composer directory', () => {
+        const autoload = parseAutoload({
+            autoload: {
+                'psr-4': { 'App\\': 'app/' },
+                'psr-0': { 'Legacy\\': 'lib/' },
+                classmap: ['database/seeders/'],
+            },
+        }, '/workspace/project');
+
+        assert.deepStrictEqual(autoload.psr4, [
+            { namespace: 'App', paths: ['/workspace/project/app'] },
+        ]);
+        assert.deepStrictEqual(autoload.psr0, [
+            { namespace: 'Legacy', paths: ['/workspace/project/lib'] },
+        ]);
+        assert.deepStrictEqual(autoload.classmap, ['/workspace/project/database/seeders']);
+    });
+
+    test('preserves empty namespace mappings', () => {
+        const autoload = parseAutoload({
+            autoload: { 'psr-4': { '': 'src/' } },
+        });
+
+        assert.deepStrictEqual(autoload.psr4, [
+            { namespace: '', paths: ['src'] },
+        ]);
+    });
+
     test('prefers psr-4 over psr-0 when both match', () => {
         const autoload = parseAutoload({
             autoload: {

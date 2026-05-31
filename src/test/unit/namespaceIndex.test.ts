@@ -143,4 +143,27 @@ namespace App\\Domain {
             'App\\Domain\\Post',
         ]);
     });
+
+    test('removes generated entries by source URI while preserving class URI', () => {
+        const index = new NamespaceIndex();
+        const sourceUri = { fsPath: '/project/vendor/composer/autoload_classmap.php' };
+        const classUri = { fsPath: '/project/vendor/package/src/User.php' };
+
+        index.replaceFile(sourceUri, [
+            {
+                className: 'User',
+                fqcn: 'Vendor\\Package\\User',
+                uri: classUri,
+                sourceUri,
+            },
+        ]);
+
+        assert.deepStrictEqual(index.resolve('User').map((item) => item.uri?.fsPath), [
+            '/project/vendor/package/src/User.php',
+        ]);
+
+        index.removeFile(sourceUri);
+
+        assert.deepStrictEqual(index.resolve('User'), []);
+    });
 });
