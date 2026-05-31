@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-import { NamespaceIndex } from './NamespaceIndex';
-import { NamespaceCacheUpdateQueue } from './NamespaceCacheUpdateQueue';
 import type { PerformanceMonitor } from '../features/PerformanceMonitor';
 import type {
     CacheActivityEvent,
@@ -15,6 +13,8 @@ import {
     isWithinRoots,
     shouldIncludePhpFile,
 } from '../utils/indexExcludes';
+import { NamespaceCacheUpdateQueue } from './NamespaceCacheUpdateQueue';
+import { NamespaceIndex } from './NamespaceIndex';
 
 export class NamespaceCache implements vscode.Disposable {
     private static readonly indexVersion = 1;

@@ -3,10 +3,10 @@ import { builtInClasses } from '../core/builtInClasses';
 import type { DeclarationParser } from '../core/DeclarationParser';
 import type { NamespaceCache } from '../core/NamespaceCache';
 import type { PhpClassDetector } from '../core/PhpClassDetector';
-import type { PerformanceMonitor } from './PerformanceMonitor';
 import type { DocumentAnalysis } from '../types';
 import { DiagnosticCode } from '../types';
 import { getConfig, ignoredClasses } from '../utils/config';
+import type { PerformanceMonitor } from './PerformanceMonitor';
 
 type UpdateOptions = {
     force?: boolean;

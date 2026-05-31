@@ -1,3 +1,4 @@
+import type { DetectedClassReference } from '../types';
 import { builtInClasses } from './builtInClasses';
 import { parsePhpDocBlocks, parsePhpDocTags, type PhpDocTag } from './PhpDocTagParser';
 import { parsePhpDocTypeReferences, type PhpDocTypeReference } from './PhpDocTypeParser';
@@ -9,7 +10,6 @@ import {
     type PhpAstNode,
 } from './phpParser';
 import { positionAt, unique } from './text';
-import type { DetectedClassReference } from '../types';
 
 const scalarTypes = new Set([
     'array',

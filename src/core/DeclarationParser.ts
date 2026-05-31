@@ -1,3 +1,4 @@
+import type { DeclarationLines, ImportKind, ParseResult, UseStatement } from '../types';
 import { getInsertPosition } from './insertPosition';
 import {
     PhpAstParser,
@@ -5,7 +6,6 @@ import {
     type PhpAstUseGroup,
     type PhpAstUseItem,
 } from './phpParser';
-import type { DeclarationLines, ImportKind, ParseResult, UseStatement } from '../types';
 
 function isClassLike(node: PhpAstNode): boolean {
     return ['class', 'interface', 'trait', 'enum'].includes(node.kind);

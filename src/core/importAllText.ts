@@ -1,9 +1,9 @@
+import type { DetectedClassReference, ResolvedNamespace } from '../types';
 import type { DeclarationParser } from './DeclarationParser';
 import { ImportManager } from './ImportManager';
 import type { NamespaceCache } from './NamespaceCache';
 import type { PhpClassDetector } from './PhpClassDetector';
 import { builtInClasses } from './builtInClasses';
-import type { DetectedClassReference, ResolvedNamespace } from '../types';
 
 function isSameNamespaceReference(
     namespace: string | null,

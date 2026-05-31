@@ -1,6 +1,6 @@
+import type { ResolvedNamespace } from '../types';
 import { builtInClasses } from './builtInClasses';
 import { NamespaceIndex } from './NamespaceIndex';
-import type { ResolvedNamespace } from '../types';
 
 interface UriLike {
     fsPath: string;

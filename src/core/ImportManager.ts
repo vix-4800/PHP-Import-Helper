@@ -1,7 +1,7 @@
+import type { UseStatement } from '../types';
 import type { DeclarationParser } from './DeclarationParser';
 import { getInsertPosition } from './insertPosition';
 import { PhpClassDetector, sanitizePhpCode } from './PhpClassDetector';
-import type { UseStatement } from '../types';
 
 export class ImportManager {
     private readonly detector = new PhpClassDetector();

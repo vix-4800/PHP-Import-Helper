@@ -1,23 +1,21 @@
-import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import type { DeclarationParser } from '../core/DeclarationParser';
 import { ImportManager } from '../core/ImportManager';
 import type { NamespaceCache } from '../core/NamespaceCache';
-import { NamespaceResolver } from '../core/NamespaceResolver';
 import {
     applyGeneratedNamespace,
     findNearestComposerPath,
     generateNamespace,
 } from '../core/NamespaceGenerator';
-import { computeImportAllText } from '../core/importAllText';
+import { NamespaceResolver } from '../core/NamespaceResolver';
 import { PhpClassDetector } from '../core/PhpClassDetector';
 import { SortManager } from '../core/SortManager';
 import { UseFoldingRangeCalculator } from '../core/UseFoldingRangeCalculator';
 import { parseAutoload } from '../core/composer';
-import { PerformanceMonitor } from './PerformanceMonitor';
+import { computeImportAllText } from '../core/importAllText';
 import type { CacheEntry, ResolvedNamespace } from '../types';
-import { parseClassTarget, type ClassTarget } from './commandTargets';
 import {
     getConfig,
     ignoredClasses,
@@ -27,6 +25,8 @@ import {
     sortMode,
 } from '../utils/config';
 import { buildIndexExcludeGlob, shouldIncludePhpFile } from '../utils/indexExcludes';
+import { PerformanceMonitor } from './PerformanceMonitor';
+import { parseClassTarget, type ClassTarget } from './commandTargets';
 
 function activePhpEditor(): vscode.TextEditor | null {
     const editor = vscode.window.activeTextEditor;

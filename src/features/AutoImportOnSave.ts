@@ -1,7 +1,7 @@
 import type * as vscode from 'vscode';
 import type { DeclarationParser } from '../core/DeclarationParser';
-import type { NamespaceCache } from '../core/NamespaceCache';
 import { computeImportAllText } from '../core/importAllText';
+import type { NamespaceCache } from '../core/NamespaceCache';
 import type { PhpClassDetector } from '../core/PhpClassDetector';
 
 export class AutoImportOnSave {
