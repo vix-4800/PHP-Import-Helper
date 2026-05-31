@@ -1,7 +1,7 @@
 import type * as vscode from 'vscode';
 
 export function getVisiblePhpDocuments(
-    editors: readonly Pick<vscode.TextEditor, 'document'>[]
+    editors: ReadonlyArray<Pick<vscode.TextEditor, 'document'>>
 ): vscode.TextDocument[] {
     const documents = new Map<string, vscode.TextDocument>();
 

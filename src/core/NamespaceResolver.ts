@@ -15,9 +15,9 @@ interface NamespaceResolverWorkspace {
     readFile: (uri: UriLike) => Promise<string>;
 }
 
-type NegativeLookup = {
+interface NegativeLookup {
     time: number;
-};
+}
 
 export class NamespaceResolver {
     private static readonly negativeLookupTtlMs = 60_000;

@@ -1,6 +1,6 @@
 export interface OutputChannelLike {
-    appendLine(value: string): void;
-    show(preserveFocus?: boolean): void;
+    appendLine: (value: string) => void;
+    show: (preserveFocus?: boolean) => void;
 }
 
 export interface PerformanceSnapshot {
@@ -14,15 +14,15 @@ export interface PerformanceSnapshot {
     ignoredWatcherEventsLastMinute: number;
 }
 
-type DiagnosticsUpdate = {
+interface DiagnosticsUpdate {
     fileName: string;
     version: number;
     ms: number;
     refs: number;
     trace: boolean;
-};
+}
 
-type IndexBatch = {
+interface IndexBatch {
     changed: number;
     deleted: number;
     readMs: number;
@@ -30,18 +30,18 @@ type IndexBatch = {
     persistMs: number;
     durationMs: number;
     trace: boolean;
-};
+}
 
-type CachePersist = {
+interface CachePersist {
     files: number;
     bytes: number;
     ms: number;
     trace: boolean;
-};
+}
 
-type WatcherEvent = {
+interface WatcherEvent {
     ignored: boolean;
-};
+}
 
 export class PerformanceMonitor {
     private static readonly oneMinuteMs = 60_000;
@@ -136,7 +136,7 @@ export class PerformanceMonitor {
     private pruneQueue(values: number[], current: number): void {
         while (
             values.length > 0 &&
-            current - values[0]! >= PerformanceMonitor.oneMinuteMs
+            current - values[0] >= PerformanceMonitor.oneMinuteMs
         ) {
             values.shift();
         }

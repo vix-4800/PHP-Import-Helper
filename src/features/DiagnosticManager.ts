@@ -8,9 +8,9 @@ import { DiagnosticCode } from '../types';
 import { getConfig, ignoredClasses } from '../utils/config';
 import type { PerformanceMonitor } from './PerformanceMonitor';
 
-type UpdateOptions = {
+interface UpdateOptions {
     force?: boolean;
-};
+}
 
 export class DiagnosticManager implements vscode.Disposable {
     private readonly collection = vscode.languages.createDiagnosticCollection('phpImportHelper');
@@ -49,7 +49,7 @@ export class DiagnosticManager implements vscode.Disposable {
                 this.pendingTimers.delete(key);
 
                 const latestDocument = this.pendingDocuments.get(key);
-                if (latestDocument === undefined || latestDocument.version !== document.version) {
+                if (latestDocument?.version !== document.version) {
                     return;
                 }
 
@@ -211,7 +211,7 @@ export class DiagnosticManager implements vscode.Disposable {
         const key = document.uri.toString();
         const cached = this.analysisCache.get(key);
 
-        if (cached !== undefined && cached.version === document.version) {
+        if (cached?.version === document.version) {
             return cached;
         }
 
