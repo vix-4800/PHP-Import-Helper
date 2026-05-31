@@ -60,18 +60,18 @@ class Foo {
 
     test('does not import same-namespace classes on save', () => {
         const cache = cacheWith({
-            CRMSelenium: [{ fqcn: 'CRM\\CRMSelenium', source: 'project' }],
+            FeatureBase: [{ fqcn: 'App\\Feature\\FeatureBase', source: 'project' }],
         });
         const autoImport = new AutoImportOnSave(detector, parser, cache);
 
         const text = autoImport.computeText(documentWithText(`<?php
 
-namespace CRM;
+namespace App\\Feature;
 
-abstract class StripChatParent extends CRMSelenium {}
+abstract class FeatureController extends FeatureBase {}
 `));
 
-        assert.ok(!text.includes('use CRM\\CRMSelenium;'));
+        assert.ok(!text.includes('use App\\Feature\\FeatureBase;'));
     });
 
     test('does not duplicate already imported classes', () => {
@@ -98,16 +98,16 @@ class Foo {
 
         const text = autoImport.computeText(documentWithText(`<?php
 
-use backend\\models\\HelpDeskMedia;
+use App\\Models\\MediaAsset;
 
 /**
- * @var backend\\models\\HelpDeskMedia $mediaModel
+ * @var App\\Models\\MediaAsset $mediaModel
  */
 `));
 
-        assert.ok(text.includes('@var HelpDeskMedia $mediaModel'));
-        assert.strictEqual((text.match(/use backend\\models\\HelpDeskMedia;/g) ?? []).length, 1);
-        assert.strictEqual((text.match(/backend\\models\\HelpDeskMedia/g) ?? []).length, 1);
+        assert.ok(text.includes('@var MediaAsset $mediaModel'));
+        assert.strictEqual((text.match(/use App\\Models\\MediaAsset;/g) ?? []).length, 1);
+        assert.strictEqual((text.match(/App\\Models\\MediaAsset/g) ?? []).length, 1);
     });
 
     test('replaces imported fully qualified classes with existing aliases', () => {
@@ -138,7 +138,7 @@ namespace backend\\controllers;
 
 use yii\\filters\\VerbFilter;
 
-class AccessRedditController
+class AccessPolicyController
 {
     public function behaviors()
     {

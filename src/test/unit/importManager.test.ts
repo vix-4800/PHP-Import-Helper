@@ -87,16 +87,16 @@ class Foo {
     test('replaces imported PHPDoc qualified names without leading separator', () => {
         const text = manager.replaceImportedFullyQualifiedClasses(`<?php
 
-use backend\\models\\HelpDeskMedia;
+use App\\Models\\MediaAsset;
 
 /**
- * @var backend\\models\\HelpDeskMedia $mediaModel
+ * @var App\\Models\\MediaAsset $mediaModel
  */
 `);
 
-        assert.ok(text.includes('@var HelpDeskMedia $mediaModel'));
-        assert.strictEqual((text.match(/use backend\\models\\HelpDeskMedia;/g) ?? []).length, 1);
-        assert.strictEqual((text.match(/backend\\models\\HelpDeskMedia/g) ?? []).length, 1);
+        assert.ok(text.includes('@var MediaAsset $mediaModel'));
+        assert.strictEqual((text.match(/use App\\Models\\MediaAsset;/g) ?? []).length, 1);
+        assert.strictEqual((text.match(/App\\Models\\MediaAsset/g) ?? []).length, 1);
     });
 
     test('removes unused imports while keeping PHPDoc-only usages', () => {

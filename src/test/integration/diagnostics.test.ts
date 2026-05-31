@@ -326,9 +326,9 @@ class Foo {
     test('does not report same-namespace classes or method tokens during parser fallback', async () => {
         const document = await createPhpDocument(`<?php
 
-namespace CRM;
+namespace App\\Feature;
 
-abstract class StripChatParent extends CRMSelenium
+abstract class FeatureController extends FeatureBase
 {
     protected function banner(bool $useClickAccept = false)
     {
@@ -342,14 +342,14 @@ abstract class StripChatParent extends CRMSelenium
 `);
 
         await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
-            { className: 'CRMSelenium', fqcn: 'CRM\\CRMSelenium', uri: document.uri },
+            { className: 'FeatureBase', fqcn: 'App\\Feature\\FeatureBase', uri: document.uri },
         ]);
         await vscode.commands.executeCommand('phpImportHelper.refreshDiagnostics', document.uri);
         await wait();
 
         const diagnostics = vscode.languages.getDiagnostics(document.uri);
 
-        assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'CRMSelenium'));
+        assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'FeatureBase'));
         assert.ok(hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'LegacyDriver'));
         for (const name of ['function', 'banner', 'useClickAccept']) {
             assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, name), name);

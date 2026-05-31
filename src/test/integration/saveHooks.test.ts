@@ -155,24 +155,24 @@ class Controller {
             await config.update('autoImportOnSave', true, vscode.ConfigurationTarget.Global);
             await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
                 {
-                    className: 'CRMSelenium',
-                    fqcn: 'CRM\\CRMSelenium',
-                    uri: vscode.Uri.file('/project/CRM/CRMSelenium.php'),
+                    className: 'FeatureBase',
+                    fqcn: 'App\\Feature\\FeatureBase',
+                    uri: vscode.Uri.file('/project/app/Feature/FeatureBase.php'),
                 },
             ]);
 
             const editor = await openWorkspaceFile('save-hooks/SameNamespace.php', `<?php
 
-namespace CRM;
+namespace App\\Feature;
 
-abstract class StripChatParent extends CRMSelenium {}
+abstract class FeatureController extends FeatureBase {}
 `);
 
             await editor.edit((edit) => edit.insert(new vscode.Position(0, 0), '\n'));
             await editor.document.save();
             await wait(300);
 
-            assert.ok(!getText(editor).includes('use CRM\\CRMSelenium;'));
+            assert.ok(!getText(editor).includes('use App\\Feature\\FeatureBase;'));
         } finally {
             await config.update('autoImportOnSave', previousAutoImport, vscode.ConfigurationTarget.Global);
         }

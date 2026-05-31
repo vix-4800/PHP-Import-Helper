@@ -23,7 +23,7 @@ namespace backend\\controllers;
 
 use yii\\filters\\VerbFilter;
 
-class AccessRedditController
+class AccessPolicyController
 {
     public function behaviors()
     {

@@ -187,13 +187,13 @@ class Foo {
     test('import command shortens selected qualified PHPDoc name already imported', async () => {
         const editor = await openPhpEditor(`<?php
 
-use backend\\models\\HelpDeskMedia;
+use App\\Models\\MediaAsset;
 
 /**
- * @var backend\\models\\HelpDeskMedia $mediaModel
+ * @var App\\Models\\MediaAsset $mediaModel
  */
 `);
-        const fqcnOffset = getText(editor).lastIndexOf('backend\\models\\HelpDeskMedia') + 18;
+        const fqcnOffset = getText(editor).lastIndexOf('App\\Models\\MediaAsset') + 18;
         const position = editor.document.positionAt(fqcnOffset);
         editor.selection = new vscode.Selection(position, position);
 
@@ -201,9 +201,9 @@ use backend\\models\\HelpDeskMedia;
         await wait();
 
         const text = getText(editor);
-        assert.ok(text.includes('use backend\\models\\HelpDeskMedia;'));
-        assert.ok(text.includes('@var HelpDeskMedia $mediaModel'));
-        assert.strictEqual((text.match(/backend\\models\\HelpDeskMedia/g) ?? []).length, 1);
+        assert.ok(text.includes('use App\\Models\\MediaAsset;'));
+        assert.ok(text.includes('@var MediaAsset $mediaModel'));
+        assert.strictEqual((text.match(/App\\Models\\MediaAsset/g) ?? []).length, 1);
     });
 
     test('expand command expands multiple selections', async () => {
@@ -278,18 +278,18 @@ class Foo extends Request {}
     test('import all skips same-namespace classes', async () => {
         const editor = await openPhpEditor(`<?php
 
-namespace CRM;
+namespace App\\Feature;
 
-abstract class StripChatParent extends CRMSelenium {}
+abstract class FeatureController extends FeatureBase {}
 `);
 
         await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
-            { className: 'CRMSelenium', fqcn: 'CRM\\CRMSelenium', uri: editor.document.uri },
+            { className: 'FeatureBase', fqcn: 'App\\Feature\\FeatureBase', uri: editor.document.uri },
         ]);
         await vscode.commands.executeCommand('phpImportHelper.importAll');
         await wait();
 
-        assert.ok(!getText(editor).includes('use CRM\\CRMSelenium;'));
+        assert.ok(!getText(editor).includes('use App\\Feature\\FeatureBase;'));
     });
 
     test('import all imports fully qualified PHPDoc types', async () => {
@@ -337,10 +337,10 @@ class Foo {
     test('import all shortens qualified PHPDoc names that are already imported', async () => {
         const editor = await openPhpEditor(`<?php
 
-use backend\\models\\HelpDeskMedia;
+use App\\Models\\MediaAsset;
 
 /**
- * @var backend\\models\\HelpDeskMedia $mediaModel
+ * @var App\\Models\\MediaAsset $mediaModel
  */
 `);
 
@@ -348,9 +348,9 @@ use backend\\models\\HelpDeskMedia;
         await wait();
 
         const text = getText(editor);
-        assert.ok(text.includes('use backend\\models\\HelpDeskMedia;'));
-        assert.ok(text.includes('@var HelpDeskMedia $mediaModel'));
-        assert.strictEqual((text.match(/backend\\models\\HelpDeskMedia/g) ?? []).length, 1);
+        assert.ok(text.includes('use App\\Models\\MediaAsset;'));
+        assert.ok(text.includes('@var MediaAsset $mediaModel'));
+        assert.strictEqual((text.match(/App\\Models\\MediaAsset/g) ?? []).length, 1);
     });
 
     test('generate namespace inserts namespace from nearest composer json', async () => {

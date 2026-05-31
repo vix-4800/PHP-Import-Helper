@@ -59,7 +59,7 @@ class UserRepository {}
     test('ignores URLs in PHPDoc see tags', () => {
         const result = detector.detectAll(`<?php
 /**
- * @see https://github.com/CloudCrmWeb/CRM/blob/main/guides/validation/validators.md
+ * @see https://example.com/acme/package/docs/validation/rules.md
  */
 function rules(): array {}
 `);
@@ -433,9 +433,9 @@ class Foo {
     test('ignores method declaration names and params while fallback syntax is active', () => {
         const result = detector.detectAll(`<?php
 
-namespace CRM;
+namespace App\\Feature;
 
-abstract class StripChatParent extends CRMSelenium
+abstract class FeatureController extends FeatureBase
 {
     protected function banner(bool $useClickAccept = false)
     {
@@ -448,7 +448,7 @@ abstract class StripChatParent extends CRMSelenium
 }
 `);
 
-        assert.ok(result.includes('CRMSelenium'));
+        assert.ok(result.includes('FeatureBase'));
         assert.ok(result.includes('LegacyDriver'));
         assert.ok(!result.includes('function'));
         assert.ok(!result.includes('banner'));
@@ -470,8 +470,8 @@ abstract class StripChatParent extends CRMSelenium
         const fallbackDetector = new PhpClassDetector(new FallbackParser());
         const result = fallbackDetector.detectAll(`<?php
 
-class HelpDesk {
-    public static function createLinkToQueue(int $help_desk_id, int $queue_id): bool
+class SupportPanel {
+    public static function createLinkToInbox(int $inbox_id, int $queue_id): bool
     {
         return new Query()->createCommand();
     }
@@ -482,7 +482,7 @@ class HelpDesk {
             'caption' => $width > 0 ? $width . 'x' . $height : 'Not image',
             'filename' => $photo->url,
             'downloadUrl' => Url::to(['file2', 'filename' => $photo->url]),
-            'url' => Url::to(['xhr-delete-file', 'id' => $helpDeskId]),
+            'url' => Url::to(['xhr-delete-file', 'id' => $itemId]),
         ];
     }
 }
@@ -490,7 +490,7 @@ class HelpDesk {
 
         assert.ok(result.includes('Query'));
         assert.ok(result.includes('Url'));
-        for (const name of ['function', 'createLinkToQueue', 'i', 'x', 'f', 'to', 'u', 'url']) {
+        for (const name of ['function', 'createLinkToInbox', 'i', 'x', 'f', 'to', 'u', 'url']) {
             assert.ok(!result.includes(name), `${name} should be ignored`);
         }
     });
