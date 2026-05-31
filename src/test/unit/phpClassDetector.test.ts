@@ -55,6 +55,20 @@ function show($request) {}
         assert.ok(!result.includes('Logger'));
     });
 
+    test('ignores PHPDoc param descriptions after variable modifiers', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @param mixed ...$arguments Arguments passed to factory
+ * @param array<int, User> &$users Users keyed by id
+ * @param ?Request $request Optional Request context
+ * @param callable(string): Response $handler Handler callback
+ */
+function build(mixed ...$arguments): void {}
+`);
+
+        assert.deepStrictEqual(result, ['User', 'Request', 'Response']);
+    });
+
     test('detects rich PHPDoc tag type expressions', () => {
         const result = detector.detectAll(`<?php
 /**
