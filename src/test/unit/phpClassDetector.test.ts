@@ -56,6 +56,36 @@ class UserRepository {}
         }
     });
 
+    test('ignores URLs in PHPDoc see tags', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @see https://github.com/CloudCrmWeb/CRM/blob/main/guides/validation/validators.md
+ */
+function rules(): array {}
+`);
+
+        assert.deepStrictEqual(result, []);
+    });
+
+    test('detects class references in PHPDoc see tags', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @see RelatedClass
+ * @see \\App\\Docs\\FullReference
+ */
+function rules(): array {}
+`);
+
+        assert.deepStrictEqual(result, ['RelatedClass']);
+        assert.deepStrictEqual(detector.detectFullyQualifiedPhpDocReferences(`<?php
+/**
+ * @see RelatedClass
+ * @see \\App\\Docs\\FullReference
+ */
+function rules(): array {}
+`).map((item) => item.rawName), ['App\\Docs\\FullReference']);
+    });
+
     test('ignores method names and variable names in PHPDoc method tags', () => {
         const result = detector.detectAll(`<?php
 /**

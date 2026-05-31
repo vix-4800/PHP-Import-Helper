@@ -128,6 +128,10 @@ function methodPhpDocTypeExpression(body: string): string {
     return [returnType, parameterTypes.trim()].filter((item) => item !== '').join(' ');
 }
 
+function isUriReference(body: string): boolean {
+    return /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(body.trim());
+}
+
 function extractPhpDocTagMatches(text: string): PhpDocTag[] {
     return parsePhpDocTags(text);
 }
@@ -149,6 +153,10 @@ function phpDocTypeExpression(tag: string, body: string): string {
 
     if (tag === 'param' || tag.startsWith('property')) {
         return body.replace(/\s+\$[A-Za-z_][A-Za-z0-9_]*.*$/, '');
+    }
+
+    if (tag === 'see' && isUriReference(body)) {
+        return '';
     }
 
     if (tag === 'return' || tag === 'throws' || tag === 'mixin' || tag === 'see') {
