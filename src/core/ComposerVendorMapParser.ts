@@ -14,7 +14,61 @@ function shortName(fqcn: string): string {
 }
 
 function unescapePhpString(value: string): string {
-    return value.replace(/\\\\/g, '\\').replace(/\\'/g, "'");
+    let result = '';
+
+    for (let index = 0; index < value.length; index++) {
+        const char = value[index];
+
+        if (char !== '\\') {
+            result += char;
+            continue;
+        }
+
+        const next = value[index + 1];
+        if (next === '\\' || next === "'") {
+            result += next;
+            index++;
+            continue;
+        }
+
+        result += char;
+    }
+
+    return result;
+}
+
+function findPhpSingleQuotedStringEnd(text: string, start: number): number {
+    for (let index = start + 1; index < text.length; index++) {
+        const char = text[index];
+
+        if (char !== '\\') {
+            if (char === "'") {
+                return index;
+            }
+
+            continue;
+        }
+
+        const next = text[index + 1];
+        if (next === '\\' || next === "'") {
+            index++;
+        }
+    }
+
+    return -1;
+}
+
+function parsePhpSingleQuotedString(value: string): string | null {
+    if (!value.startsWith("'")) {
+        return null;
+    }
+
+    const end = findPhpSingleQuotedStringEnd(value, 0);
+    if (end !== value.length - 1) {
+        return null;
+    }
+
+    return unescapePhpString(value.slice(1, -1));
 }
 
 function uriForPath(fsPath: string): CacheEntry['uri'] {
@@ -82,11 +136,9 @@ export class ComposerVendorMapParser {
             ['$baseDir', baseDir],
         ]);
         const entries: CacheEntry[] = [];
-        const entryPattern = /'((?:\\.|[^'])+)'\s*=>\s*([^,\r\n]+(?:\s*\.\s*[^,\r\n]+)*)/g;
 
-        for (const match of text.matchAll(entryPattern)) {
-            const fqcn = unescapePhpString(match[1]);
-            const fsPath = this.evaluatePathExpression(match[2], variables);
+        for (const { fqcn, expression } of this.findEntries(text)) {
+            const fsPath = this.evaluatePathExpression(expression, variables);
 
             if (fsPath === null || fqcn === '') {
                 continue;
@@ -102,6 +154,67 @@ export class ComposerVendorMapParser {
         return entries;
     }
 
+    private *findEntries(text: string): Iterable<{ fqcn: string; expression: string }> {
+        let index = 0;
+
+        while (index < text.length) {
+            const keyStart = text.indexOf("'", index);
+            if (keyStart === -1) {
+                return;
+            }
+
+            const keyEnd = findPhpSingleQuotedStringEnd(text, keyStart);
+            if (keyEnd === -1) {
+                return;
+            }
+
+            let cursor = keyEnd + 1;
+            while (/\s/.test(text[cursor] ?? '')) {
+                cursor++;
+            }
+
+            if (text.slice(cursor, cursor + 2) !== '=>') {
+                index = keyEnd + 1;
+                continue;
+            }
+
+            const fqcn = unescapePhpString(text.slice(keyStart + 1, keyEnd));
+            cursor += 2;
+
+            while (/\s/.test(text[cursor] ?? '')) {
+                cursor++;
+            }
+
+            const expressionStart = cursor;
+            while (cursor < text.length) {
+                const char = text[cursor];
+
+                if (char === "'") {
+                    const stringEnd = findPhpSingleQuotedStringEnd(text, cursor);
+                    if (stringEnd === -1) {
+                        return;
+                    }
+
+                    cursor = stringEnd + 1;
+                    continue;
+                }
+
+                if (char === ',' || char === '\r' || char === '\n') {
+                    break;
+                }
+
+                cursor++;
+            }
+
+            const expression = text.slice(expressionStart, cursor).trim();
+            if (expression !== '') {
+                yield { fqcn, expression };
+            }
+
+            index = cursor + 1;
+        }
+    }
+
     private evaluatePathExpression(
         expression: string,
         variables: ReadonlyMap<string, string>
@@ -115,9 +228,9 @@ export class ComposerVendorMapParser {
                 continue;
             }
 
-            const stringMatch = /^'((?:\\.|[^'])*)'$/.exec(part);
-            if (stringMatch !== null) {
-                resolved += unescapePhpString(stringMatch[1]);
+            const stringValue = parsePhpSingleQuotedString(part);
+            if (stringValue !== null) {
+                resolved += stringValue;
                 continue;
             }
 

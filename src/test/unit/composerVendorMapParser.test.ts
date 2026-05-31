@@ -74,4 +74,14 @@ return array(
 
         assert.deepStrictEqual(entries.map((entry) => entry.className), ['Mockery']);
     });
+
+    test('unescapes php single-quoted strings without double unescaping', () => {
+        const entries = parser.parse('/workspace/vendor/composer/autoload_classmap.php', String.raw`<?php
+return array(
+    'Foo\\\\\'Bar' => __DIR__ . '/Test.php',
+);
+`);
+
+        assert.strictEqual(entries[0]?.fqcn, String.raw`Foo\\'Bar`);
+    });
 });
