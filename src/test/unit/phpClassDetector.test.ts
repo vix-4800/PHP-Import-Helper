@@ -22,6 +22,23 @@ class Foo extends Controller implements JsonSerializable {
         assert.ok(!names.includes('array'));
     });
 
+    test('ignores qualified runtime references in files without namespace', () => {
+        const text = `#!/usr/bin/env php
+<?php
+
+Vendor\\Package\\Bootstrap::load(__DIR__);
+
+$config = Framework\\Config\\ArrayHelper::merge(
+    require __DIR__ . '/config/main.php',
+    require __DIR__ . '/config/local.php'
+);
+
+$application = new Framework\\Console\\Application($config);
+`;
+
+        assert.deepStrictEqual(detector.detectAll(text), []);
+    });
+
     test('detects PHPDoc tag types but ignores free text', () => {
         const result = detector.detectAll(`<?php
 /**
