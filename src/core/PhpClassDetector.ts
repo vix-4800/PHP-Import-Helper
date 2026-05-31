@@ -351,10 +351,12 @@ export class PhpClassDetector {
 
     public detectReferences(text: string): DetectedClassReference[] {
         const document = this.parser.parse(text);
-        const found = this.detectAstReferences(document);
+        const namespace = this.parser.getNamespace(document)?.name;
+        const globalNamespace = namespace === undefined || namespace === null;
+        const found = this.detectAstReferences(document, globalNamespace);
 
         if (document.errors.length > 0) {
-            found.push(...this.detectFallbackReferences(text));
+            found.push(...this.detectFallbackReferences(text, globalNamespace));
         }
 
         return this.uniqueReferences(found);
@@ -372,7 +374,7 @@ export class PhpClassDetector {
         );
     }
 
-    private detectAstReferences(document: PhpAstDocument): DetectedClassReference[] {
+    private detectAstReferences(document: PhpAstDocument, globalNamespace: boolean): DetectedClassReference[] {
         const found: DetectedClassReference[] = [];
         const processedComments = new Set<number>();
 
@@ -384,41 +386,41 @@ export class PhpClassDetector {
                 case 'interface':
                 case 'trait':
                 case 'enum':
-                    this.addNodeList(found, node.extends);
-                    this.addNodeList(found, node.implements);
-                    this.addAttributeGroups(found, node.attrGroups);
+                    this.addNodeList(found, node.extends, globalNamespace);
+                    this.addNodeList(found, node.implements, globalNamespace);
+                    this.addAttributeGroups(found, node.attrGroups, globalNamespace);
                     return;
                 case 'traituse':
-                    this.addNodeList(found, node.traits);
+                    this.addNodeList(found, node.traits, globalNamespace);
                     return;
                 case 'function':
                 case 'method':
                 case 'closure':
                 case 'arrowfunc':
-                    this.addTypeReference(found, node.type);
-                    this.addAttributeGroups(found, node.attrGroups);
+                    this.addTypeReference(found, node.type, globalNamespace);
+                    this.addAttributeGroups(found, node.attrGroups, globalNamespace);
                     return;
                 case 'parameter':
                 case 'property':
                 case 'classconstant':
-                    this.addTypeReference(found, node.type);
-                    this.addAttributeGroups(found, node.attrGroups);
+                    this.addTypeReference(found, node.type, globalNamespace);
+                    this.addAttributeGroups(found, node.attrGroups, globalNamespace);
                     return;
                 case 'new':
                 case 'staticlookup':
-                    this.addNodeReference(found, node.what);
+                    this.addNodeReference(found, node.what, globalNamespace);
                     return;
                 case 'bin':
                     if (node.type === 'instanceof') {
-                        this.addNodeReference(found, node.right);
+                        this.addNodeReference(found, node.right, globalNamespace);
                     }
                     return;
                 case 'catch':
-                    this.addNodeList(found, node.what);
+                    this.addNodeList(found, node.what, globalNamespace);
                     return;
                 case 'attribute':
                     if (typeof node.name === 'string') {
-                        this.addRawReference(found, node.name, node.loc);
+                        this.addRawReference(found, node.name, node.loc, globalNamespace);
                     }
                     return;
                 default:
@@ -429,24 +431,24 @@ export class PhpClassDetector {
         return found;
     }
 
-    private addNodeList(found: DetectedClassReference[], value: unknown): void {
+    private addNodeList(found: DetectedClassReference[], value: unknown, globalNamespace: boolean): void {
         if (Array.isArray(value)) {
-            value.forEach((item) => this.addNodeReference(found, item));
+            value.forEach((item) => this.addNodeReference(found, item, globalNamespace));
             return;
         }
 
-        this.addNodeReference(found, value);
+        this.addNodeReference(found, value, globalNamespace);
     }
 
-    private addNodeReference(found: DetectedClassReference[], value: unknown): void {
+    private addNodeReference(found: DetectedClassReference[], value: unknown, globalNamespace: boolean): void {
         if (this.parser.isName(value)) {
-            this.addRawReference(found, value.name, value.loc);
+            this.addRawReference(found, value.name, value.loc, globalNamespace);
         }
     }
 
-    private addTypeReference(found: DetectedClassReference[], value: unknown): void {
+    private addTypeReference(found: DetectedClassReference[], value: unknown, globalNamespace: boolean): void {
         if (this.parser.isName(value)) {
-            this.addRawReference(found, value.name, value.loc);
+            this.addRawReference(found, value.name, value.loc, globalNamespace);
             return;
         }
 
@@ -459,7 +461,7 @@ export class PhpClassDetector {
             const node = value as PhpAstNode;
 
             if (node.kind === 'typereference' && typeof node.name === 'string') {
-                this.addRawReference(found, node.name, node.loc);
+                this.addRawReference(found, node.name, node.loc, globalNamespace);
                 return;
             }
 
@@ -467,12 +469,12 @@ export class PhpClassDetector {
                 (node.kind === 'uniontype' || node.kind === 'intersectiontype') &&
                 Array.isArray(node.types)
             ) {
-                node.types.forEach((item) => this.addTypeReference(found, item));
+                node.types.forEach((item) => this.addTypeReference(found, item, globalNamespace));
             }
         }
     }
 
-    private addAttributeGroups(found: DetectedClassReference[], value: unknown): void {
+    private addAttributeGroups(found: DetectedClassReference[], value: unknown, globalNamespace: boolean): void {
         if (!Array.isArray(value)) {
             return;
         }
@@ -493,7 +495,7 @@ export class PhpClassDetector {
                     ) {
                         const attribute = item as PhpAstNode;
                         if (typeof attribute.name === 'string') {
-                            this.addRawReference(found, attribute.name, attribute.loc);
+                            this.addRawReference(found, attribute.name, attribute.loc, globalNamespace);
                         }
                     }
                 });
@@ -504,7 +506,8 @@ export class PhpClassDetector {
     private addRawReference(
         found: DetectedClassReference[],
         rawName: string,
-        loc: PhpAstLocation | undefined
+        loc: PhpAstLocation | undefined,
+        globalNamespace: boolean
     ): void {
         if (loc === undefined) {
             return;
@@ -528,6 +531,7 @@ export class PhpClassDetector {
             rawName: normalized,
             importName,
             fullyQualified,
+            importCandidate: !(globalNamespace && !fullyQualified && normalized.includes('\\')),
             line: loc.start.line - 1,
             character: loc.start.column,
         });
@@ -571,7 +575,7 @@ export class PhpClassDetector {
         }
     }
 
-    private detectFallbackReferences(text: string): DetectedClassReference[] {
+    private detectFallbackReferences(text: string, globalNamespace: boolean): DetectedClassReference[] {
         const sanitized = sanitizePhpCode(text, { preservePhpDoc: true });
         const found: DetectedClassReference[] = [];
 
@@ -604,7 +608,7 @@ export class PhpClassDetector {
                         rawName,
                         importName,
                         fullyQualified,
-                        importCandidate,
+                        importCandidate: importCandidate && !(globalNamespace && !fullyQualified && rawName.includes('\\')),
                         ...pos,
                     });
                 }
@@ -686,6 +690,18 @@ export class PhpClassDetector {
             item.importName !== null &&
             !builtInClasses.has(item.importName)
         );
+    }
+
+    private filterGlobalNamespaceQualifiedReferences(
+        items: DetectedClassReference[],
+        document: PhpAstDocument
+    ): DetectedClassReference[] {
+        const namespace = this.parser.getNamespace(document)?.name;
+        if (namespace !== undefined && namespace !== null) {
+            return items;
+        }
+
+        return items.filter((item) => item.fullyQualified || !item.rawName.includes('\\'));
     }
 
     private uniqueReferences(items: DetectedClassReference[]): DetectedClassReference[] {
