@@ -32,6 +32,8 @@ const scalarTypes = new Set([
     'void',
 ]);
 
+const phpDocVariablePattern = /\s+(?:&\s*)?(?:\.\.\.\s*)?\$[A-Za-z_][A-Za-z0-9_]*.*$/;
+
 function blankRange(chars: string[], start: number, end: number): void {
     for (let index = start; index < end; index++) {
         if (chars[index] !== '\n' && chars[index] !== '\r') {
@@ -148,11 +150,11 @@ function phpDocTypeExpression(tag: string, body: string): string {
     }
 
     if (tag === 'var') {
-        return leadingPhpDocTypeExpression(body.replace(/\s+\$[A-Za-z_][A-Za-z0-9_]*.*$/, ''));
+        return leadingPhpDocTypeExpression(body.replace(phpDocVariablePattern, ''));
     }
 
     if (tag === 'param' || tag.startsWith('property')) {
-        return body.replace(/\s+\$[A-Za-z_][A-Za-z0-9_]*.*$/, '');
+        return body.replace(phpDocVariablePattern, '');
     }
 
     if (tag === 'see' && isUriReference(body)) {
