@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { NamespaceCache } from '../../core/NamespaceCache';
-import { openWorkspaceFile, wait } from './helper';
+import { openWorkspaceFile, testFixtureRoot, wait } from './helper';
 
 type CacheActivityEvent = {
     kind: 'start' | 'end';
@@ -21,6 +21,22 @@ function storageUri(name: string): vscode.Uri {
         process.env.VSCODE_TEST_RUN_ID ?? 'default',
         name
     );
+}
+
+async function ensureComposerFixture(path = 'src/'): Promise<vscode.Uri> {
+    const root = testFixtureRoot();
+    const composerUri = vscode.Uri.joinPath(root, 'composer.json');
+
+    await vscode.workspace.fs.createDirectory(root);
+    await vscode.workspace.fs.writeFile(composerUri, Buffer.from(JSON.stringify({
+        autoload: {
+            'psr-4': {
+                'App\\Models\\': path,
+            },
+        },
+    }), 'utf8'));
+
+    return composerUri;
 }
 
 async function waitForActivityEnd(cache: NamespaceCache, phase: CacheActivityEvent['phase']): Promise<void> {
@@ -63,15 +79,16 @@ suite('NamespaceCache', () => {
     test('persists rebuilt fixture index and loads it on initialize', async () => {
         const storage = storageUri(`persist-${Date.now()}`);
         const className = `PersistedUser${Date.now()}`;
+        await ensureComposerFixture('src/cache-persist/');
+        await openWorkspaceFile(`src/cache-persist/${className}.php`, `<?php
+
+namespace App\\Models;
+
+class ${className} {}
+`);
         const first = new NamespaceCache(storage);
 
-        await first.rebuild([
-            {
-                className,
-                fqcn: `App\\Models\\${className}`,
-                uri: vscode.Uri.file(`/project/app/Models/${className}.php`),
-            },
-        ]);
+        await first.rebuild();
         first.dispose();
 
         const second = new NamespaceCache(storage);
@@ -135,21 +152,32 @@ suite('NamespaceCache', () => {
         const indexUri = vscode.Uri.joinPath(storage, 'namespace-index.json');
         const className = `NewUser${Date.now()}`;
         const oldClassName = `OldUser${Date.now()}`;
-        const editor = await openWorkspaceFile(`cache-stale/${className}.php`, `<?php
+        const composerUri = await ensureComposerFixture('src/cache-stale/');
+        const editor = await openWorkspaceFile(`src/cache-stale/${className}.php`, `<?php
 
 namespace App\\Models;
 
 class ${className} {}
 `);
         const fileUri = editor.document.uri;
+        const composerStat = await vscode.workspace.fs.stat(composerUri);
 
         await vscode.workspace.fs.createDirectory(storage);
         await vscode.workspace.fs.writeFile(indexUri, Buffer.from(JSON.stringify({
-            version: 1,
+            version: 2,
             files: {
                 [fileUri.toString()]: {
                     mtime: -1,
-                    entries: [{ className: oldClassName, fqcn: `App\\Models\\${oldClassName}` }],
+                    entries: [{
+                        className: oldClassName,
+                        fqcn: `App\\Models\\${oldClassName}`,
+                        uri: fileUri.toString(),
+                    }],
+                },
+            },
+            dependencies: {
+                [composerUri.toString()]: {
+                    mtime: composerStat.mtime,
                 },
             },
         }), 'utf8'));
@@ -170,7 +198,8 @@ class ${className} {}
         const storage = storageUri(`fresh-${Date.now()}`);
         const indexUri = vscode.Uri.joinPath(storage, 'namespace-index.json');
         const className = `FreshUser${Date.now()}`;
-        const editor = await openWorkspaceFile(`cache-fresh/${className}.php`, `<?php
+        const composerUri = await ensureComposerFixture('src/cache-fresh/');
+        const editor = await openWorkspaceFile(`src/cache-fresh/${className}.php`, `<?php
 
 namespace App\\Models;
 
@@ -178,16 +207,26 @@ class ${className} {}
 `);
         const fileUri = editor.document.uri;
         const stat = await vscode.workspace.fs.stat(fileUri);
+        const composerStat = await vscode.workspace.fs.stat(composerUri);
         const cache = new NamespaceCache(storage);
         let persists = 0;
 
         await vscode.workspace.fs.createDirectory(storage);
         await vscode.workspace.fs.writeFile(indexUri, Buffer.from(JSON.stringify({
-            version: 1,
+            version: 2,
             files: {
                 [fileUri.toString()]: {
                     mtime: stat.mtime,
-                    entries: [{ className, fqcn: `App\\Models\\${className}` }],
+                    entries: [{
+                        className,
+                        fqcn: `App\\Models\\${className}`,
+                        uri: fileUri.toString(),
+                    }],
+                },
+            },
+            dependencies: {
+                [composerUri.toString()]: {
+                    mtime: composerStat.mtime,
                 },
             },
         }), 'utf8'));
@@ -209,6 +248,7 @@ class ${className} {}
     test('emits update activity for watched file changes', async () => {
         const storage = storageUri(`watch-${Date.now()}`);
         const className = `WatchedUser${Date.now()}`;
+        await ensureComposerFixture('src/cache-watch/');
         const cache = new NamespaceCache(storage);
         const events: CacheActivityEvent[] = [];
 
@@ -217,7 +257,7 @@ class ${className} {}
         await cache.initialize();
         events.length = 0;
 
-        const editor = await openWorkspaceFile(`cache-watch/${className}.php`, `<?php
+        const editor = await openWorkspaceFile(`src/cache-watch/${className}.php`, `<?php
 
 namespace App\\Models;
 
@@ -242,13 +282,14 @@ namespace App\\Models;
         const storage = storageUri(`batch-${Date.now()}`);
         const firstClassName = `FirstWatchedUser${Date.now()}`;
         const secondClassName = `SecondWatchedUser${Date.now()}`;
-        const first = await openWorkspaceFile(`cache-batch/${firstClassName}.php`, `<?php
+        await ensureComposerFixture('src/cache-batch/');
+        const first = await openWorkspaceFile(`src/cache-batch/${firstClassName}.php`, `<?php
 
 namespace App\\Models;
 
 class ${firstClassName} {}
 `);
-        const second = await openWorkspaceFile(`cache-batch/${secondClassName}.php`, `<?php
+        const second = await openWorkspaceFile(`src/cache-batch/${secondClassName}.php`, `<?php
 
 namespace App\\Models;
 
