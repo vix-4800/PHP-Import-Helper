@@ -23,6 +23,25 @@ function storageUri(name: string): vscode.Uri {
     );
 }
 
+async function waitForActivityEnd(cache: NamespaceCache, phase: CacheActivityEvent['phase']): Promise<void> {
+    return await new Promise<void>((resolve, reject) => {
+        let subscription: vscode.Disposable;
+        const timeout = setTimeout(() => {
+            subscription.dispose();
+            reject(new Error(`Timed out waiting for ${phase} activity end.`));
+        }, 5000);
+        subscription = cache.onDidChangeActivity((event) => {
+            if (event.kind !== 'end' || event.phase !== phase) {
+                return;
+            }
+
+            clearTimeout(timeout);
+            subscription.dispose();
+            resolve();
+        });
+    });
+}
+
 suite('NamespaceCache', () => {
     test('emits initialize activity while loading cache', async () => {
         const storage = storageUri(`initialize-${Date.now()}`);
@@ -202,10 +221,11 @@ class ${className} {}
 
 namespace App\\Models;
 
-class ${className} {}
+        class ${className} {}
 `);
+        const updateEnded = waitForActivityEnd(cache, 'update');
         (cache as unknown as CacheInternals).scheduleIndexFile(editor.document.uri);
-        await wait(1500);
+        await updateEnded;
 
         assert.deepStrictEqual(events, [
             { kind: 'start', phase: 'update' },
@@ -246,9 +266,10 @@ class ${secondClassName} {}
         cache.onDidChangeActivity((event) => events.push(event));
         cache.onDidUpdate(() => updates++);
 
+        const updateEnded = waitForActivityEnd(cache, 'update');
         internals.scheduleIndexFile(first.document.uri);
         internals.scheduleIndexFile(second.document.uri);
-        await wait(1500);
+        await updateEnded;
 
         assert.deepStrictEqual(events, [
             { kind: 'start', phase: 'update' },
