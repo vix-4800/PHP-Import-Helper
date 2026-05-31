@@ -6,6 +6,7 @@ export interface AutoloadMapping {
 export interface AutoloadConfig {
     psr4: AutoloadMapping[];
     psr0: AutoloadMapping[];
+    classmap: string[];
 }
 
 type ComposerSection = Record<string, string[] | string>;
@@ -14,37 +15,63 @@ function normalizeNamespace(namespace: string): string {
     return namespace.replace(/\\+$/, '');
 }
 
-function normalizePaths(value: string[] | string): string[] {
-    const paths = Array.isArray(value) ? value : [value];
-
-    return paths.map((path) => path.replace(/[\\/]+$/, ''));
+function normalizePath(path: string): string {
+    return path.replace(/\\/g, '/').replace(/\/+$/, '');
 }
 
-function parseSection(section: unknown, key: 'psr-0' | 'psr-4'): AutoloadMapping[] {
+function isAbsolutePath(path: string): boolean {
+    return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path);
+}
+
+function normalizePaths(value: string[] | string, composerDir?: string): string[] {
+    const paths = Array.isArray(value) ? value : [value];
+
+    return paths.map((path) => {
+        const normalized = normalizePath(path);
+
+        if (composerDir === undefined || isAbsolutePath(normalized)) {
+            return normalized;
+        }
+
+        return normalizePath(`${normalizePath(composerDir)}/${normalized}`);
+    });
+}
+
+function parseSection(
+    section: unknown,
+    key: 'psr-0' | 'psr-4',
+    composerDir?: string
+): AutoloadMapping[] {
     const mappings = (section as Record<string, ComposerSection> | undefined)?.[key] ?? {};
 
     return Object.entries(mappings).map(([namespace, paths]) => ({
         namespace: normalizeNamespace(namespace),
-        paths: normalizePaths(paths),
+        paths: normalizePaths(paths, composerDir),
     }));
 }
 
-export function parseAutoload(composer: unknown): AutoloadConfig {
+function parseClassmap(section: unknown, composerDir?: string): string[] {
+    const classmap = (section as { classmap?: string[] | string } | undefined)?.classmap;
+
+    return classmap === undefined ? [] : normalizePaths(classmap, composerDir);
+}
+
+export function parseAutoload(composer: unknown, composerDir?: string): AutoloadConfig {
     const root = composer as { autoload?: unknown; 'autoload-dev'?: unknown };
 
     const mergedPsr4 = new Map<string, string[]>();
     const mergedPsr0 = new Map<string, string[]>();
 
     for (const mapping of [
-        ...parseSection(root.autoload, 'psr-4'),
-        ...parseSection(root['autoload-dev'], 'psr-4'),
+        ...parseSection(root.autoload, 'psr-4', composerDir),
+        ...parseSection(root['autoload-dev'], 'psr-4', composerDir),
     ]) {
         mergedPsr4.set(mapping.namespace, mapping.paths);
     }
 
     for (const mapping of [
-        ...parseSection(root.autoload, 'psr-0'),
-        ...parseSection(root['autoload-dev'], 'psr-0'),
+        ...parseSection(root.autoload, 'psr-0', composerDir),
+        ...parseSection(root['autoload-dev'], 'psr-0', composerDir),
     ]) {
         mergedPsr0.set(mapping.namespace, mapping.paths);
     }
@@ -52,11 +79,11 @@ export function parseAutoload(composer: unknown): AutoloadConfig {
     return {
         psr4: [...mergedPsr4].map(([namespace, paths]) => ({ namespace, paths })),
         psr0: [...mergedPsr0].map(([namespace, paths]) => ({ namespace, paths })),
+        classmap: [
+            ...parseClassmap(root.autoload, composerDir),
+            ...parseClassmap(root['autoload-dev'], composerDir),
+        ],
     };
-}
-
-function normalizePath(filePath: string): string {
-    return filePath.replace(/\\/g, '/').replace(/\/+$/, '');
 }
 
 function findMatchingBase(

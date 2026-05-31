@@ -1,8 +1,9 @@
 import type { CacheEntry, ResolvedNamespace } from '../types';
 import { PhpAstParser } from './phpParser';
 
-type IndexedEntry = Omit<CacheEntry, 'uri'> & {
+type IndexedEntry = Omit<CacheEntry, 'sourceUri' | 'uri'> & {
     uri: { fsPath: string };
+    sourceUri?: { fsPath: string };
 };
 
 export class NamespaceIndex {
@@ -56,7 +57,9 @@ export class NamespaceIndex {
 
     public removeFile(uri: { fsPath: string }): void {
         for (const [className, entries] of this.entries) {
-            const remaining = entries.filter((entry) => entry.uri.fsPath !== uri.fsPath);
+            const remaining = entries.filter((entry) =>
+                (entry.sourceUri?.fsPath ?? entry.uri.fsPath) !== uri.fsPath
+            );
 
             if (remaining.length === 0) {
                 this.entries.delete(className);
@@ -69,6 +72,10 @@ export class NamespaceIndex {
 
     public add(entry: IndexedEntry): void {
         const list = this.entries.get(entry.className) ?? [];
+        if (list.some((item) => item.fqcn === entry.fqcn && item.uri.fsPath === entry.uri.fsPath)) {
+            return;
+        }
+
         list.push(entry);
         this.entries.set(entry.className, list);
     }

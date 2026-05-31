@@ -14,6 +14,7 @@ function resolveAutoloadPaths(autoload: AutoloadConfig, basePath: string): Autol
     return {
         psr4: autoload.psr4.map((mapping) => resolveMappingPaths(mapping, basePath)),
         psr0: autoload.psr0.map((mapping) => resolveMappingPaths(mapping, basePath)),
+        classmap: autoload.classmap.map((mappingPath) => path.resolve(basePath, mappingPath)),
     };
 }
 

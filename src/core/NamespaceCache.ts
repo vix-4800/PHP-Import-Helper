@@ -13,23 +13,49 @@ import {
     isWithinRoots,
     shouldIncludePhpFile,
 } from '../utils/indexExcludes';
+import {
+    ComposerIndexSourcePlanner,
+    type ComposerIndexSourcePlan,
+    type ComposerIndexSourcePlannerWorkspace,
+} from './ComposerIndexSourcePlanner';
+import { ComposerVendorMapParser } from './ComposerVendorMapParser';
 import { NamespaceCacheUpdateQueue } from './NamespaceCacheUpdateQueue';
 import { NamespaceIndex } from './NamespaceIndex';
 
+interface PersistedEntry {
+    className: string;
+    fqcn: string;
+    uri: string;
+}
+
+interface FileIndexEntry {
+    mtime: number;
+    entries: PersistedEntry[];
+}
+
+function cacheEntryToPersisted(entry: CacheEntry): PersistedEntry {
+    return {
+        className: entry.className,
+        fqcn: entry.fqcn,
+        uri: entry.uri.toString(),
+    };
+}
+
 export class NamespaceCache implements vscode.Disposable {
-    private static readonly indexVersion = 1;
+    private static readonly indexVersion = 2;
     private static readonly indexFileName = 'namespace-index.json';
     private static readonly fileBatchSize = 64;
     private static readonly statBatchSize = 256;
     private static readonly updateDebounceMs = 1000;
 
     private readonly index = new NamespaceIndex();
-    private readonly fileIndex = new Map<
-        string,
-        { mtime: number; entries: Array<{ className: string; fqcn: string }> }
-    >();
-    private watcher: vscode.FileSystemWatcher | null = null;
+    private readonly fileIndex = new Map<string, FileIndexEntry>();
+    private readonly dependencyIndex = new Map<string, number>();
+    private readonly vendorMapParser = new ComposerVendorMapParser();
+    private readonly watchers: vscode.FileSystemWatcher[] = [];
     private updateTimer: ReturnType<typeof setTimeout> | null = null;
+    private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+    private sourcePlan: ComposerIndexSourcePlan | null = null;
     private readonly updateQueue: NamespaceCacheUpdateQueue<vscode.Uri>;
     private readonly onDidUpdateEmitter = new vscode.EventEmitter<void>();
     private readonly onDidChangeActivityEmitter = new vscode.EventEmitter<CacheActivityEvent>();
@@ -51,26 +77,23 @@ export class NamespaceCache implements vscode.Disposable {
     public setEntries(entries: CacheEntry[]): void {
         this.index.setEntries(entries);
         this.fileIndex.clear();
+        this.dependencyIndex.clear();
 
         for (const entry of entries) {
-            const uriString = entry.uri.toString();
+            const sourceUri = entry.sourceUri ?? entry.uri;
+            const uriString = sourceUri.toString();
             const file = this.fileIndex.get(uriString) ?? { mtime: 0, entries: [] };
-            file.entries.push({
-                className: entry.className,
-                fqcn: entry.fqcn,
-            });
+            file.entries.push(cacheEntryToPersisted(entry));
             this.fileIndex.set(uriString, file);
         }
     }
 
     public add(entry: CacheEntry): void {
         this.index.add(entry);
-        const uriString = entry.uri.toString();
+        const sourceUri = entry.sourceUri ?? entry.uri;
+        const uriString = sourceUri.toString();
         const file = this.fileIndex.get(uriString) ?? { mtime: 0, entries: [] };
-        file.entries.push({
-            className: entry.className,
-            fqcn: entry.fqcn,
-        });
+        file.entries.push(cacheEntryToPersisted(entry));
         this.fileIndex.set(uriString, file);
     }
 
@@ -115,10 +138,14 @@ export class NamespaceCache implements vscode.Disposable {
 
         this.index.clear();
         this.fileIndex.clear();
-        const files = await this.findIndexedPhpFiles();
+        this.dependencyIndex.clear();
+        const sourcePlan = await this.buildSourcePlan();
+        this.sourcePlan = sourcePlan;
+        const files = await this.findIndexedPhpFiles(sourcePlan);
 
         await this.indexFiles(files);
-
+        await this.indexVendorMaps(sourcePlan);
+        await this.recordDependencyFiles(sourcePlan);
         await this.persistIndex();
         this.onDidUpdateEmitter.fire();
     }
@@ -129,26 +156,36 @@ export class NamespaceCache implements vscode.Disposable {
         if (!loaded) {
             await this.rebuildNow();
         } else {
-            const changed = await this.incrementalUpdate();
-            if (changed) {
-                await this.persistIndex();
+            const sourcePlan = await this.buildSourcePlan();
+            this.sourcePlan = sourcePlan;
+            if (await this.dependenciesChanged(sourcePlan)) {
+                await this.rebuildNow();
+            } else {
+                const changed = await this.incrementalUpdate(sourcePlan);
+                if (changed) {
+                    await this.persistIndex();
+                }
+                this.onDidUpdateEmitter.fire();
             }
-            this.onDidUpdateEmitter.fire();
         }
 
-        this.watcher = vscode.workspace.createFileSystemWatcher('**/*.php');
-        this.watcher.onDidCreate((uri) => this.scheduleIndexFile(uri));
-        this.watcher.onDidChange((uri) => this.scheduleIndexFile(uri));
-        this.watcher.onDidDelete((uri) => this.scheduleRemoveFile(uri));
+        this.createWatchers();
     }
 
     public dispose(): void {
         if (this.updateTimer !== null) {
             clearTimeout(this.updateTimer);
         }
+        if (this.rebuildTimer !== null) {
+            clearTimeout(this.rebuildTimer);
+        }
         this.updateTimer = null;
+        this.rebuildTimer = null;
 
-        this.watcher?.dispose();
+        for (const watcher of this.watchers) {
+            watcher.dispose();
+        }
+        this.watchers.length = 0;
         this.onDidUpdateEmitter.dispose();
         this.onDidChangeActivityEmitter.dispose();
     }
@@ -163,6 +200,26 @@ export class NamespaceCache implements vscode.Disposable {
             indexedFiles: this.fileIndex.size,
             indexedClasses,
         };
+    }
+
+    private createWatchers(): void {
+        const phpWatcher = vscode.workspace.createFileSystemWatcher('**/*.php');
+        phpWatcher.onDidCreate((uri) => this.scheduleIndexFile(uri));
+        phpWatcher.onDidChange((uri) => this.scheduleIndexFile(uri));
+        phpWatcher.onDidDelete((uri) => this.scheduleRemoveFile(uri));
+        this.watchers.push(phpWatcher);
+
+        for (const pattern of [
+            '**/composer.json',
+            '**/composer.lock',
+            '**/vendor/composer/autoload_*.php',
+        ]) {
+            const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+            watcher.onDidCreate((uri) => this.scheduleDependencyRebuild(uri));
+            watcher.onDidChange((uri) => this.scheduleDependencyRebuild(uri));
+            watcher.onDidDelete((uri) => this.scheduleDependencyRebuild(uri));
+            this.watchers.push(watcher);
+        }
     }
 
     private scheduleIndexFile(uri: vscode.Uri): void {
@@ -185,6 +242,19 @@ export class NamespaceCache implements vscode.Disposable {
         }
 
         this.scheduleQueuedUpdate();
+    }
+
+    private scheduleDependencyRebuild(_uri: vscode.Uri): void {
+        this.performance?.recordWatcherEvent({ ignored: false });
+
+        if (this.rebuildTimer !== null) {
+            clearTimeout(this.rebuildTimer);
+        }
+
+        this.rebuildTimer = setTimeout(() => {
+            this.rebuildTimer = null;
+            void this.rebuild();
+        }, NamespaceCache.updateDebounceMs);
     }
 
     private scheduleQueuedUpdate(): void {
@@ -227,7 +297,9 @@ export class NamespaceCache implements vscode.Disposable {
                     this.removeFile(uri);
                 }
 
-                const metrics = await this.indexFiles(batch.changed);
+                const metrics = await this.indexFiles(batch.changed.filter((uri) =>
+                    this.shouldIndexWatchedUri(uri)
+                ));
                 readMs += metrics.readMs;
                 parseMs += metrics.parseMs;
                 changed = changed || batch.changed.length > 0 || batch.deleted.length > 0;
@@ -289,16 +361,13 @@ export class NamespaceCache implements vscode.Disposable {
             const readMs = Date.now() - readStartedAt;
             const text = Buffer.from(raw).toString('utf8');
             const parseStartedAt = Date.now();
-            const entries = NamespaceIndex.entriesFromPhpFile(uri, text);
+            const entries = NamespaceIndex.entriesFromPhpFile(uri, text) as CacheEntry[];
             const parseMs = Date.now() - parseStartedAt;
 
-            this.index.replaceFile(uri, entries as CacheEntry[]);
+            this.index.replaceFile(uri, entries);
             this.fileIndex.set(uri.toString(), {
                 mtime: stat.mtime,
-                entries: entries.map((entry) => ({
-                    className: entry.className,
-                    fqcn: entry.fqcn,
-                })),
+                entries: entries.map(cacheEntryToPersisted),
             });
 
             return { readMs, parseMs };
@@ -306,6 +375,39 @@ export class NamespaceCache implements vscode.Disposable {
             this.removeFile(uri);
             return { readMs: 0, parseMs: 0 };
         }
+    }
+
+    private async indexVendorMap(mapUri: vscode.Uri): Promise<void> {
+        try {
+            const [raw, stat] = await Promise.all([
+                vscode.workspace.fs.readFile(mapUri),
+                vscode.workspace.fs.stat(mapUri),
+            ]);
+            const parsed = this.vendorMapParser.parse(
+                mapUri.fsPath,
+                Buffer.from(raw).toString('utf8')
+            );
+            const entries = parsed.map((entry) => ({
+                className: entry.className,
+                fqcn: entry.fqcn,
+                uri: vscode.Uri.file(entry.uri.fsPath),
+                sourceUri: mapUri,
+            }));
+
+            this.index.replaceFile(mapUri, entries);
+            this.fileIndex.set(mapUri.toString(), {
+                mtime: stat.mtime,
+                entries: entries.map(cacheEntryToPersisted),
+            });
+        } catch {
+            this.removeFile(mapUri);
+        }
+    }
+
+    private async indexVendorMaps(sourcePlan: ComposerIndexSourcePlan): Promise<void> {
+        await this.mapInBatches(sourcePlan.vendorMapFiles, NamespaceCache.fileBatchSize, async (filePath) => {
+            await this.indexVendorMap(vscode.Uri.file(filePath));
+        });
     }
 
     private removeFile(uri: vscode.Uri): void {
@@ -327,8 +429,8 @@ export class NamespaceCache implements vscode.Disposable {
         );
     }
 
-    private async incrementalUpdate(): Promise<boolean> {
-        const files = await this.findIndexedPhpFiles();
+    private async incrementalUpdate(sourcePlan: ComposerIndexSourcePlan): Promise<boolean> {
+        const files = await this.findIndexedPhpFiles(sourcePlan);
         const candidates = new Map<string, vscode.Uri>();
         const seen = new Set<string>();
         let changed = false;
@@ -374,7 +476,7 @@ export class NamespaceCache implements vscode.Disposable {
 
         for (const uriString of [...this.fileIndex.keys()]) {
             const uri = vscode.Uri.parse(uriString);
-            if (!seen.has(uriString) && this.isInWorkspace(uri)) {
+            if (!seen.has(uriString) && this.isInPlannedProjectRoots(uri)) {
                 this.removeFile(uri);
                 changed = true;
             }
@@ -383,11 +485,28 @@ export class NamespaceCache implements vscode.Disposable {
         return changed;
     }
 
-    private async findIndexedPhpFiles(): Promise<vscode.Uri[]> {
+    private async findIndexedPhpFiles(sourcePlan: ComposerIndexSourcePlan): Promise<vscode.Uri[]> {
         const coarseExclude = buildIndexExcludeGlob(indexExcludePatterns());
-        const files = await vscode.workspace.findFiles('**/*.php', coarseExclude);
+        const files = new Map<string, vscode.Uri>();
 
-        return files.filter((uri) => this.shouldIndexWatchedUri(uri));
+        for (const root of sourcePlan.projectRoots) {
+            if (root.endsWith('.php')) {
+                const uri = vscode.Uri.file(root);
+                if (this.shouldIndexProjectUri(uri, sourcePlan)) {
+                    files.set(uri.toString(), uri);
+                }
+                continue;
+            }
+
+            const pattern = new vscode.RelativePattern(root, '**/*.php');
+            for (const uri of await vscode.workspace.findFiles(pattern, coarseExclude)) {
+                if (this.shouldIndexProjectUri(uri, sourcePlan)) {
+                    files.set(uri.toString(), uri);
+                }
+            }
+        }
+
+        return [...files.values()];
     }
 
     private async mapInBatches<T, TResult>(
@@ -405,13 +524,17 @@ export class NamespaceCache implements vscode.Disposable {
         return results;
     }
 
-    private isInWorkspace(uri: vscode.Uri): boolean {
-        return isWithinRoots(uri.fsPath, this.projectRoots());
+    private isInPlannedProjectRoots(uri: vscode.Uri): boolean {
+        return this.sourcePlan !== null && isWithinRoots(uri.fsPath, this.sourcePlan.projectRoots);
     }
 
     private shouldIndexWatchedUri(uri: vscode.Uri): boolean {
+        return this.sourcePlan !== null && this.shouldIndexProjectUri(uri, this.sourcePlan);
+    }
+
+    private shouldIndexProjectUri(uri: vscode.Uri, sourcePlan: ComposerIndexSourcePlan): boolean {
         return uri.scheme === 'file' &&
-            shouldIncludePhpFile(uri.fsPath, this.projectRoots(), indexExcludePatterns(uri));
+            shouldIncludePhpFile(uri.fsPath, sourcePlan.projectRoots, indexExcludePatterns(uri));
     }
 
     private shouldRefreshPersistedFile(uri: vscode.Uri): boolean {
@@ -419,10 +542,11 @@ export class NamespaceCache implements vscode.Disposable {
             return false;
         }
 
-        return shouldIncludePhpFile(uri.fsPath, this.projectRoots(), indexExcludePatterns(uri));
+        return this.sourcePlan !== null &&
+            shouldIncludePhpFile(uri.fsPath, this.sourcePlan.projectRoots, indexExcludePatterns(uri));
     }
 
-    private projectRoots(): string[] {
+    private workspaceRoots(): string[] {
         const roots = new Set(
             (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath)
         );
@@ -430,6 +554,74 @@ export class NamespaceCache implements vscode.Disposable {
         roots.add(process.cwd());
 
         return [...roots];
+    }
+
+    private async buildSourcePlan(): Promise<ComposerIndexSourcePlan> {
+        const planner = new ComposerIndexSourcePlanner(this.plannerWorkspace());
+
+        return await planner.plan(this.workspaceRoots(), indexExcludePatterns());
+    }
+
+    private plannerWorkspace(): ComposerIndexSourcePlannerWorkspace {
+        return {
+            readFile: async (filePath) => Buffer.from(
+                await vscode.workspace.fs.readFile(vscode.Uri.file(filePath))
+            ).toString('utf8'),
+            pathExists: async (filePath) => {
+                try {
+                    await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+                    return true;
+                } catch {
+                    return false;
+                }
+            },
+            findFiles: async (root, fileName) => {
+                const pattern = new vscode.RelativePattern(root, `**/${fileName}`);
+                const files = await vscode.workspace.findFiles(pattern, buildIndexExcludeGlob(indexExcludePatterns()));
+
+                return files.map((uri) => uri.fsPath);
+            },
+        };
+    }
+
+    private async dependenciesChanged(sourcePlan: ComposerIndexSourcePlan): Promise<boolean> {
+        for (const filePath of sourcePlan.dependencyFiles) {
+            const uri = vscode.Uri.file(filePath);
+            const uriString = uri.toString();
+            const existingMtime = this.fileIndex.get(uriString)?.mtime ??
+                this.dependencyIndex.get(uriString);
+
+            try {
+                const stat = await vscode.workspace.fs.stat(uri);
+                if (existingMtime === undefined || existingMtime !== stat.mtime) {
+                    return true;
+                }
+            } catch {
+                if (existingMtime !== undefined) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private async recordDependencyFiles(sourcePlan: ComposerIndexSourcePlan): Promise<void> {
+        for (const filePath of sourcePlan.dependencyFiles) {
+            const uri = vscode.Uri.file(filePath);
+            const uriString = uri.toString();
+
+            if (this.fileIndex.has(uriString)) {
+                continue;
+            }
+
+            try {
+                const stat = await vscode.workspace.fs.stat(uri);
+                this.dependencyIndex.set(uriString, stat.mtime);
+            } catch {
+                this.dependencyIndex.delete(uriString);
+            }
+        }
     }
 
     private async loadPersistedIndex(): Promise<boolean> {
@@ -447,8 +639,9 @@ export class NamespaceCache implements vscode.Disposable {
                 version?: number;
                 files?: Record<string, {
                     mtime?: number;
-                    entries?: Array<{ className?: string; fqcn?: string }>;
+                    entries?: Array<{ className?: string; fqcn?: string; uri?: string }>;
                 }>;
+                dependencies?: Record<string, { mtime?: number }>;
             };
 
             if (parsed.version !== NamespaceCache.indexVersion || parsed.files === undefined) {
@@ -456,40 +649,49 @@ export class NamespaceCache implements vscode.Disposable {
             }
 
             const entries: CacheEntry[] = [];
-            const persistedFileIndex = new Map<
-                string,
-                { mtime: number; entries: Array<{ className: string; fqcn: string }> }
-            >();
-            for (const [uriString, file] of Object.entries(parsed.files)) {
-                const uri = vscode.Uri.parse(uriString);
-                const fileEntries: Array<{ className: string; fqcn: string }> = [];
+            const persistedFileIndex = new Map<string, FileIndexEntry>();
+            for (const [sourceUriString, file] of Object.entries(parsed.files)) {
+                const sourceUri = vscode.Uri.parse(sourceUriString);
+                const fileEntries: PersistedEntry[] = [];
 
                 for (const entry of file.entries ?? []) {
-                    if (typeof entry.className !== 'string' || typeof entry.fqcn !== 'string') {
+                    if (
+                        typeof entry.className !== 'string' ||
+                        typeof entry.fqcn !== 'string' ||
+                        typeof entry.uri !== 'string'
+                    ) {
                         continue;
                     }
 
                     entries.push({
                         className: entry.className,
                         fqcn: entry.fqcn,
-                        uri,
+                        uri: vscode.Uri.parse(entry.uri),
+                        sourceUri,
                     });
                     fileEntries.push({
                         className: entry.className,
                         fqcn: entry.fqcn,
+                        uri: entry.uri,
                     });
                 }
 
-                persistedFileIndex.set(uriString, {
+                persistedFileIndex.set(sourceUriString, {
                     mtime: typeof file.mtime === 'number' ? file.mtime : 0,
                     entries: fileEntries,
                 });
             }
 
-            this.setEntries(entries);
+            this.index.setEntries(entries);
             this.fileIndex.clear();
             for (const [uriString, file] of persistedFileIndex) {
                 this.fileIndex.set(uriString, file);
+            }
+            this.dependencyIndex.clear();
+            for (const [uriString, dependency] of Object.entries(parsed.dependencies ?? {})) {
+                if (typeof dependency.mtime === 'number') {
+                    this.dependencyIndex.set(uriString, dependency.mtime);
+                }
             }
 
             return true;
@@ -503,10 +705,8 @@ export class NamespaceCache implements vscode.Disposable {
             return;
         }
 
-        const files: Record<string, {
-            mtime: number;
-            entries: Array<{ className: string; fqcn: string }>;
-        }> = {};
+        const files: Record<string, FileIndexEntry> = {};
+        const dependencies: Record<string, { mtime: number }> = {};
 
         for (const [uriString, file] of this.fileIndex) {
             files[uriString] = {
@@ -514,11 +714,15 @@ export class NamespaceCache implements vscode.Disposable {
                 entries: file.entries,
             };
         }
+        for (const [uriString, mtime] of this.dependencyIndex) {
+            dependencies[uriString] = { mtime };
+        }
 
         const indexUri = vscode.Uri.joinPath(this.storageUri, NamespaceCache.indexFileName);
         const encoded = Buffer.from(JSON.stringify({
             version: NamespaceCache.indexVersion,
             files,
+            dependencies,
         }), 'utf8');
         const startedAt = Date.now();
         await vscode.workspace.fs.createDirectory(this.storageUri);

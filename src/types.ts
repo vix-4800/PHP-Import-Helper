@@ -59,6 +59,7 @@ export interface CacheEntry {
     fqcn: string;
     className: string;
     uri: vscode.Uri;
+    sourceUri?: vscode.Uri;
 }
 
 export type CacheActivityPhase = 'initialize' | 'rebuild' | 'update';
