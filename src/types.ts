@@ -40,6 +40,7 @@ export interface DetectedClassReference extends DetectedClass {
     importName: string | null;
     fullyQualified: boolean;
     importCandidate?: boolean;
+    runtimeStatic?: boolean;
 }
 
 export interface DocumentAnalysis {

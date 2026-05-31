@@ -152,7 +152,7 @@ function phpDocTypeExpression(tag: string, body: string): string {
     }
 
     if (tag === 'param' || tag.startsWith('property')) {
-        return body.replace(/\s+\$[A-Za-z_][A-Za-z0-9_]*.*$/, '');
+        return body.replace(/\s+(?:&\s*)?(?:\.\.\.\s*)?\$[A-Za-z_][A-Za-z0-9_]*.*$/, '');
     }
 
     if (tag === 'see' && isUriReference(body)) {
@@ -407,8 +407,16 @@ export class PhpClassDetector {
                     this.addAttributeGroups(found, node.attrGroups, globalNamespace);
                     return;
                 case 'new':
-                case 'staticlookup':
                     this.addNodeReference(found, node.what, globalNamespace);
+                    return;
+                case 'staticlookup':
+                    this.addNodeReference(
+                        found,
+                        node.what,
+                        globalNamespace,
+                        true,
+                        this.isUnqualifiedNameNode(node.what)
+                    );
                     return;
                 case 'bin':
                     if (node.type === 'instanceof') {
@@ -440,9 +448,22 @@ export class PhpClassDetector {
         this.addNodeReference(found, value, globalNamespace);
     }
 
-    private addNodeReference(found: DetectedClassReference[], value: unknown, globalNamespace: boolean): void {
+    private addNodeReference(
+        found: DetectedClassReference[],
+        value: unknown,
+        globalNamespace: boolean,
+        importCandidate = true,
+        runtimeStatic = false
+    ): void {
         if (this.parser.isName(value)) {
-            this.addRawReference(found, value.name, value.loc, globalNamespace);
+            this.addRawReference(
+                found,
+                value.name,
+                value.loc,
+                globalNamespace,
+                importCandidate,
+                runtimeStatic
+            );
         }
     }
 
@@ -507,7 +528,9 @@ export class PhpClassDetector {
         found: DetectedClassReference[],
         rawName: string,
         loc: PhpAstLocation | undefined,
-        globalNamespace: boolean
+        globalNamespace: boolean,
+        importCandidate = true,
+        runtimeStatic = false
     ): void {
         if (loc === undefined) {
             return;
@@ -531,10 +554,16 @@ export class PhpClassDetector {
             rawName: normalized,
             importName,
             fullyQualified,
-            importCandidate: !(globalNamespace && !fullyQualified && normalized.includes('\\')),
+            importCandidate: importCandidate &&
+                !(globalNamespace && !fullyQualified && normalized.includes('\\')),
+            runtimeStatic,
             line: loc.start.line - 1,
             character: loc.start.column,
         });
+    }
+
+    private isUnqualifiedNameNode(value: unknown): boolean {
+        return this.parser.isName(value) && !value.name.replace(/^\\+|\\+$/g, '').includes('\\');
     }
 
     private addPhpDocComments(

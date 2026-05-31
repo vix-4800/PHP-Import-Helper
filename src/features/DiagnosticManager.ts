@@ -124,6 +124,14 @@ export class DiagnosticManager implements vscode.Disposable {
                     continue;
                 }
 
+                if (
+                    parsed.namespace === null &&
+                    item.runtimeStatic === true &&
+                    this.cache.resolve(item.name).length === 0
+                ) {
+                    continue;
+                }
+
                 const range = new vscode.Range(
                     item.line,
                     item.character,
