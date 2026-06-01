@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed PHPDoc `@param` parsing so descriptions after variadic or by-reference variables are not treated as class imports.
+- Fixed PHP 8.4 asymmetric visibility parsing so `private(set)` and `protected(set)` modifiers on typed properties are not reported as missing class imports.
 
 ## [0.2.1] - 2026-05-31
 

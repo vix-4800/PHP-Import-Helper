@@ -402,10 +402,15 @@ export class PhpClassDetector {
                     this.addTypeReference(found, node.type, globalNamespace);
                     this.addAttributeGroups(found, node.attrGroups, globalNamespace);
                     return;
-                case 'parameter':
-                case 'property':
                 case 'classconstant':
+                case 'parameter':
                     this.addTypeReference(found, node.type, globalNamespace);
+                    this.addAttributeGroups(found, node.attrGroups, globalNamespace);
+                    return;
+                case 'property':
+                    if (this.hasNamedIdentifier(node.name)) {
+                        this.addTypeReference(found, node.type, globalNamespace);
+                    }
                     this.addAttributeGroups(found, node.attrGroups, globalNamespace);
                     return;
                 case 'new':
@@ -446,6 +451,18 @@ export class PhpClassDetector {
         if (this.parser.isName(value)) {
             this.addRawReference(found, value.name, value.loc, globalNamespace);
         }
+    }
+
+    private hasNamedIdentifier(value: unknown): boolean {
+        return (
+            typeof value === 'object' &&
+            value !== null &&
+            'kind' in value &&
+            (value as { kind: unknown }).kind === 'identifier' &&
+            'name' in value &&
+            typeof (value as { name: unknown }).name === 'string' &&
+            (value as { name: string }).name !== ''
+        );
     }
 
     private addTypeReference(found: DetectedClassReference[], value: unknown, globalNamespace: boolean): void {
@@ -639,7 +656,7 @@ export class PhpClassDetector {
         addMatches(sanitized, /\bfn\s*\([^)]*\)\s*:\s*([^=]+)=>/g);
         addMatches(
             sanitized,
-            /\b(?:public|protected|private)(?![^\n;{]*\bfunction\b)(?:\s+(?:static|readonly|private\(set\)|protected\(set\)))*\s+([^$;=]+)\s+\$[A-Za-z_]/g
+            /\b(?:public|protected|private)(?!\s*\(set\))(?![^\n;{]*\bfunction\b)(?:\s+(?:static|readonly|private\(set\)|protected\(set\)))*\s+([^$;=]+)\s+\$[A-Za-z_]/g
         );
         addMatches(
             sanitized,

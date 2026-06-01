@@ -461,6 +461,22 @@ class Foo {
         assert.ok(result.includes('HookValue'));
     });
 
+    test('ignores asymmetric visibility set modifier for scalar typed properties', () => {
+        const result = detector.detectAll(`<?php
+
+class Foo {
+    public protected(set) ?string $title = null;
+    public private(set) string|int $status = 'draft';
+    protected private(set) false|null $flag = null;
+}
+`);
+
+        for (const name of ['set', 'protected', 'private']) {
+            assert.ok(!result.includes(name), `${name} should not be detected`);
+        }
+        assert.deepStrictEqual(result, []);
+    });
+
     test('ignores method declaration names and params while fallback syntax is active', () => {
         const result = detector.detectAll(`<?php
 

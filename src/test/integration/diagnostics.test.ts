@@ -323,6 +323,22 @@ class Foo {
         assert.ok(hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'HookValue'));
     });
 
+    test('does not report asymmetric visibility set modifiers as missing imports', async () => {
+        const diagnostics = await diagnosticsFor(`<?php
+
+class Foo {
+    public protected(set) ?string $title = null;
+    public private(set) string|int $status = 'draft';
+    protected private(set) false|null $flag = null;
+}
+`);
+
+        for (const name of ['set', 'protected', 'private']) {
+            assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, name), name);
+        }
+        assert.deepStrictEqual(diagnostics, []);
+    });
+
     test('does not report same-namespace classes or method tokens during parser fallback', async () => {
         const document = await createPhpDocument(`<?php
 
