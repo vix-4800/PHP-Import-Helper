@@ -131,7 +131,19 @@ function methodPhpDocTypeExpression(body: string): string {
 }
 
 function isUriReference(body: string): boolean {
-    return /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(body.trim());
+    return /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(leadingPhpDocTypeExpression(body));
+}
+
+function isPathLikeReference(body: string): boolean {
+    const target = leadingPhpDocTypeExpression(body);
+
+    return (
+        target.startsWith('./') ||
+        target.startsWith('../') ||
+        target.startsWith('#') ||
+        target.includes('/') ||
+        /^[^\\\s]+\.[A-Za-z0-9]+(?:[?#].*)?$/.test(target)
+    );
 }
 
 function extractPhpDocTagMatches(text: string): PhpDocTag[] {
@@ -157,7 +169,7 @@ function phpDocTypeExpression(tag: string, body: string): string {
         return body.replace(phpDocVariablePattern, '');
     }
 
-    if (tag === 'see' && isUriReference(body)) {
+    if (tag === 'see' && (isUriReference(body) || isPathLikeReference(body))) {
         return '';
     }
 

@@ -98,6 +98,17 @@ function rules(): array {}
         assert.deepStrictEqual(result, []);
     });
 
+    test('ignores relative documentation paths in PHPDoc see tags', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @see guides/access-control.md
+ */
+interface Scopeable {}
+`);
+
+        assert.deepStrictEqual(result, []);
+    });
+
     test('detects class references in PHPDoc see tags', () => {
         const result = detector.detectAll(`<?php
 /**
