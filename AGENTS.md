@@ -19,6 +19,7 @@ This repository is a bundled VS Code extension for PHP import management. It imp
 - Keep `src/extension.ts` thin.
 - Use `phpImportHelper.*` for public command and config IDs.
 - Always use TDD: write failing unit test first, confirm it fails, then implement.
+- Use abstract, minimal fixture code in tests. Do not copy real project files, real app paths, or concrete application code; model the behavior with generic names.
 - Keep changes local to requested behaviour.
 - Do not add abstractions for future flexibility.
 - If user-visible command/config behaviour changes, update `package.json`, README, and tests.
