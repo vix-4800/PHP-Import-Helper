@@ -525,4 +525,167 @@ exit($application->run());
         assert.strictEqual(setCalls.length, 1);
         assert.deepStrictEqual(setCalls[0]?.diagnostics, []);
     });
+
+    test('does not report unresolved root namespace runtime references as missing imports', () => {
+        const setCalls: Array<{
+            uri: TestUri;
+            diagnostics: Array<{ code?: string; message: string; severity: number }>;
+        }> = [];
+        const vscodeStub: VscodeStub = {
+            languages: {
+                createDiagnosticCollection: () => ({
+                    set: (targetUri, diagnostics) =>
+                        setCalls.push({
+                            uri: targetUri,
+                            diagnostics: diagnostics as Array<{
+                                code?: string;
+                                message: string;
+                                severity: number;
+                            }>,
+                        }),
+                    delete: () => undefined,
+                    dispose: () => undefined,
+                }),
+            },
+            workspace: {
+                getConfiguration: () => ({
+                    get: <T>(_section: string, defaultValue: T) => defaultValue,
+                }),
+            },
+            Range: class Range {
+                public constructor(
+                    public readonly startLine: number,
+                    public readonly startCharacter: number,
+                    public readonly endLine: number,
+                    public readonly endCharacter: number
+                ) {}
+            },
+            Diagnostic: class Diagnostic {
+                public code?: string;
+                public source?: string;
+                public tags?: number[];
+
+                public constructor(
+                    public readonly range: unknown,
+                    public readonly message: string,
+                    public readonly severity: number
+                ) {}
+            },
+            DiagnosticSeverity: {
+                Error: 0,
+                Warning: 1,
+                Hint: 2,
+            },
+            DiagnosticTag: {
+                Unnecessary: 1,
+            },
+        };
+        const { DiagnosticManager } = loadDiagnosticManager(vscodeStub);
+        const manager = new DiagnosticManager(
+            new PhpClassDetector(),
+            new DeclarationParser(),
+            cacheWith({})
+        );
+        const targetUri = uri('file:///workspace/views/root-runtime-reference.php');
+
+        manager.update(
+            documentWithText(`<?php
+
+use Example\\Ui\\FormBuilder;
+
+$form = FormBuilder::open();
+echo RootRuntimeFacade::service()->format($model->createdAt);
+$status = CustomRootStatus::make($model);
+`, 1, targetUri) as never
+        );
+
+        assert.strictEqual(setCalls.length, 1);
+        assert.deepStrictEqual(setCalls[0]?.diagnostics, []);
+    });
+
+    test('reports root namespace references when cache resolves only namespaced candidates', () => {
+        const setCalls: Array<{
+            uri: TestUri;
+            diagnostics: Array<{ code?: string; message: string; severity: number }>;
+        }> = [];
+        const vscodeStub: VscodeStub = {
+            languages: {
+                createDiagnosticCollection: () => ({
+                    set: (targetUri, diagnostics) =>
+                        setCalls.push({
+                            uri: targetUri,
+                            diagnostics: diagnostics as Array<{
+                                code?: string;
+                                message: string;
+                                severity: number;
+                            }>,
+                        }),
+                    delete: () => undefined,
+                    dispose: () => undefined,
+                }),
+            },
+            workspace: {
+                getConfiguration: () => ({
+                    get: <T>(_section: string, defaultValue: T) => defaultValue,
+                }),
+            },
+            Range: class Range {
+                public constructor(
+                    public readonly startLine: number,
+                    public readonly startCharacter: number,
+                    public readonly endLine: number,
+                    public readonly endCharacter: number
+                ) {}
+            },
+            Diagnostic: class Diagnostic {
+                public code?: string;
+                public source?: string;
+                public tags?: number[];
+
+                public constructor(
+                    public readonly range: unknown,
+                    public readonly message: string,
+                    public readonly severity: number
+                ) {}
+            },
+            DiagnosticSeverity: {
+                Error: 0,
+                Warning: 1,
+                Hint: 2,
+            },
+            DiagnosticTag: {
+                Unnecessary: 1,
+            },
+        };
+        const { DiagnosticManager } = loadDiagnosticManager(vscodeStub);
+        const manager = new DiagnosticManager(
+            new PhpClassDetector(),
+            new DeclarationParser(),
+            cacheWith({
+                FormBuilder: [{ fqcn: 'Example\\Ui\\FormBuilder', source: 'vendor' }],
+            })
+        );
+        const targetUri = uri('file:///workspace/views/root-runtime-reference.php');
+
+        manager.update(
+            documentWithText(`<?php
+
+$form = FormBuilder::open();
+`, 1, targetUri) as never
+        );
+
+        assert.strictEqual(setCalls.length, 1);
+        assert.deepStrictEqual(
+            setCalls[0]?.diagnostics.map((item) => ({
+                code: item.code,
+                message: item.message,
+                severity: item.severity,
+            })),
+            [{
+                code: 'phpImportHelper.classNotImported',
+                message: "Class 'FormBuilder' is not imported.",
+                severity: 1,
+            }]
+        );
+    });
 });

@@ -40,6 +40,7 @@ export interface DetectedClassReference extends DetectedClass {
     importName: string | null;
     fullyQualified: boolean;
     importCandidate?: boolean;
+    referenceKind?: 'attribute' | 'phpdoc' | 'runtime' | 'type';
 }
 
 export interface DocumentAnalysis {

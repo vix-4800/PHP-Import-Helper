@@ -3,7 +3,7 @@ import { builtInClasses } from '../core/builtInClasses';
 import type { DeclarationParser } from '../core/DeclarationParser';
 import type { NamespaceCache } from '../core/NamespaceCache';
 import type { PhpClassDetector } from '../core/PhpClassDetector';
-import type { DocumentAnalysis } from '../types';
+import type { DetectedClassReference, DocumentAnalysis } from '../types';
 import { DiagnosticCode } from '../types';
 import { getConfig, ignoredClasses } from '../utils/config';
 import type { PerformanceMonitor } from './PerformanceMonitor';
@@ -120,7 +120,7 @@ export class DiagnosticManager implements vscode.Disposable {
                     continue;
                 }
 
-                if (this.isSameNamespace(parsed.namespace, item.name)) {
+                if (this.isAvailableWithoutImport(parsed.namespace, item)) {
                     continue;
                 }
 
@@ -229,13 +229,19 @@ export class DiagnosticManager implements vscode.Disposable {
         return analysis;
     }
 
-    private isSameNamespace(namespace: string | null, className: string): boolean {
+    private isAvailableWithoutImport(
+        namespace: string | null,
+        reference: DetectedClassReference
+    ): boolean {
+        const resolved = this.cache.resolve(reference.name);
+
         if (namespace === null) {
-            return this.cache.resolve(className).some((item) => item.fqcn === className);
+            return (
+                resolved.some((item) => item.fqcn === reference.name) ||
+                (resolved.length === 0 && reference.referenceKind === 'runtime')
+            );
         }
 
-        return this.cache
-            .resolve(className)
-            .some((item) => item.fqcn === `${namespace}\\${className}`);
+        return resolved.some((item) => item.fqcn === `${namespace}\\${reference.name}`);
     }
 }

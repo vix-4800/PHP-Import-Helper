@@ -320,6 +320,7 @@ export class PhpClassDetector {
                         rawName,
                         importName: null,
                         fullyQualified: true,
+                        referenceKind: 'phpdoc',
                         ...positionAt(text, nameOffset),
                     });
                 }
@@ -354,6 +355,7 @@ export class PhpClassDetector {
                         importName,
                         fullyQualified: false,
                         importCandidate,
+                        referenceKind: 'phpdoc',
                         ...positionAt(text, nameOffset),
                     });
                 }
@@ -400,12 +402,12 @@ export class PhpClassDetector {
                 case 'interface':
                 case 'trait':
                 case 'enum':
-                    this.addNodeList(found, node.extends, globalNamespace);
-                    this.addNodeList(found, node.implements, globalNamespace);
+                    this.addNodeList(found, node.extends, globalNamespace, 'type');
+                    this.addNodeList(found, node.implements, globalNamespace, 'type');
                     this.addAttributeGroups(found, node.attrGroups, globalNamespace);
                     return;
                 case 'traituse':
-                    this.addNodeList(found, node.traits, globalNamespace);
+                    this.addNodeList(found, node.traits, globalNamespace, 'type');
                     return;
                 case 'function':
                 case 'method':
@@ -427,19 +429,19 @@ export class PhpClassDetector {
                     return;
                 case 'new':
                 case 'staticlookup':
-                    this.addNodeReference(found, node.what, globalNamespace);
+                    this.addNodeReference(found, node.what, globalNamespace, 'runtime');
                     return;
                 case 'bin':
                     if (node.type === 'instanceof') {
-                        this.addNodeReference(found, node.right, globalNamespace);
+                        this.addNodeReference(found, node.right, globalNamespace, 'runtime');
                     }
                     return;
                 case 'catch':
-                    this.addNodeList(found, node.what, globalNamespace);
+                    this.addNodeList(found, node.what, globalNamespace, 'type');
                     return;
                 case 'attribute':
                     if (typeof node.name === 'string') {
-                        this.addRawReference(found, node.name, node.loc, globalNamespace);
+                        this.addRawReference(found, node.name, node.loc, globalNamespace, 'attribute');
                     }
                     return;
                 default:
@@ -450,18 +452,28 @@ export class PhpClassDetector {
         return found;
     }
 
-    private addNodeList(found: DetectedClassReference[], value: unknown, globalNamespace: boolean): void {
+    private addNodeList(
+        found: DetectedClassReference[],
+        value: unknown,
+        globalNamespace: boolean,
+        referenceKind: DetectedClassReference['referenceKind']
+    ): void {
         if (Array.isArray(value)) {
-            value.forEach((item) => this.addNodeReference(found, item, globalNamespace));
+            value.forEach((item) => this.addNodeReference(found, item, globalNamespace, referenceKind));
             return;
         }
 
-        this.addNodeReference(found, value, globalNamespace);
+        this.addNodeReference(found, value, globalNamespace, referenceKind);
     }
 
-    private addNodeReference(found: DetectedClassReference[], value: unknown, globalNamespace: boolean): void {
+    private addNodeReference(
+        found: DetectedClassReference[],
+        value: unknown,
+        globalNamespace: boolean,
+        referenceKind: DetectedClassReference['referenceKind']
+    ): void {
         if (this.parser.isName(value)) {
-            this.addRawReference(found, value.name, value.loc, globalNamespace);
+            this.addRawReference(found, value.name, value.loc, globalNamespace, referenceKind);
         }
     }
 
@@ -479,7 +491,7 @@ export class PhpClassDetector {
 
     private addTypeReference(found: DetectedClassReference[], value: unknown, globalNamespace: boolean): void {
         if (this.parser.isName(value)) {
-            this.addRawReference(found, value.name, value.loc, globalNamespace);
+            this.addRawReference(found, value.name, value.loc, globalNamespace, 'type');
             return;
         }
 
@@ -492,7 +504,7 @@ export class PhpClassDetector {
             const node = value as PhpAstNode;
 
             if (node.kind === 'typereference' && typeof node.name === 'string') {
-                this.addRawReference(found, node.name, node.loc, globalNamespace);
+                this.addRawReference(found, node.name, node.loc, globalNamespace, 'type');
                 return;
             }
 
@@ -526,7 +538,7 @@ export class PhpClassDetector {
                     ) {
                         const attribute = item as PhpAstNode;
                         if (typeof attribute.name === 'string') {
-                            this.addRawReference(found, attribute.name, attribute.loc, globalNamespace);
+                            this.addRawReference(found, attribute.name, attribute.loc, globalNamespace, 'attribute');
                         }
                     }
                 });
@@ -538,7 +550,8 @@ export class PhpClassDetector {
         found: DetectedClassReference[],
         rawName: string,
         loc: PhpAstLocation | undefined,
-        globalNamespace: boolean
+        globalNamespace: boolean,
+        referenceKind: DetectedClassReference['referenceKind']
     ): void {
         if (loc === undefined) {
             return;
@@ -563,6 +576,7 @@ export class PhpClassDetector {
             importName,
             fullyQualified,
             importCandidate: !(globalNamespace && !fullyQualified && normalized.includes('\\')),
+            referenceKind,
             line: loc.start.line - 1,
             character: loc.start.column,
         });
@@ -599,6 +613,7 @@ export class PhpClassDetector {
                         importName,
                         fullyQualified,
                         importCandidate,
+                        referenceKind: 'phpdoc',
                         ...positionAt(text, nameOffset),
                     });
                 }
@@ -614,7 +629,8 @@ export class PhpClassDetector {
             source: string,
             pattern: RegExp,
             group = 1,
-            transform: (value: string) => string = (value) => value
+            transform: (value: string) => string = (value) => value,
+            referenceKind: DetectedClassReference['referenceKind'] = 'type'
         ): void => {
             for (const match of source.matchAll(pattern)) {
                 const value = match[group];
@@ -640,6 +656,7 @@ export class PhpClassDetector {
                         importName,
                         fullyQualified,
                         importCandidate: importCandidate && !(globalNamespace && !fullyQualified && rawName.includes('\\')),
+                        referenceKind,
                         ...pos,
                     });
                 }
@@ -674,11 +691,29 @@ export class PhpClassDetector {
             sanitized,
             /\b(?:public|protected|private)?\s*const\s+([A-Za-z_][A-Za-z0-9_|\\&()?\s]*)\s+[A-Z_]/g
         );
-        addMatches(sanitized, /\bnew\s+(?!class\b)(\\?[A-Za-z_][A-Za-z0-9_\\]*)/g);
-        addMatches(sanitized, /(?<![$\\])\b([A-Za-z_][A-Za-z0-9_\\]*)::/g);
-        addMatches(sanitized, /\binstanceof\s+(\\?[A-Za-z_][A-Za-z0-9_\\]*)/g);
+        addMatches(
+            sanitized,
+            /\bnew\s+(?!class\b)(\\?[A-Za-z_][A-Za-z0-9_\\]*)/g,
+            1,
+            (value) => value,
+            'runtime'
+        );
+        addMatches(
+            sanitized,
+            /(?<![$\\])\b([A-Za-z_][A-Za-z0-9_\\]*)::/g,
+            1,
+            (value) => value,
+            'runtime'
+        );
+        addMatches(
+            sanitized,
+            /\binstanceof\s+(\\?[A-Za-z_][A-Za-z0-9_\\]*)/g,
+            1,
+            (value) => value,
+            'runtime'
+        );
         addMatches(sanitized, /\bcatch\s*\(([^)$]+)(?:\$[A-Za-z_][A-Za-z0-9_]*)?\)/g);
-        addMatches(sanitized, /#\[(.*?)\]/gs);
+        addMatches(sanitized, /#\[(.*?)\]/gs, 1, (value) => value, 'attribute');
 
         for (const block of parsePhpDocBlocks(text)) {
             const phpDoc = block.text;
@@ -702,6 +737,7 @@ export class PhpClassDetector {
                         importName,
                         fullyQualified,
                         importCandidate,
+                        referenceKind: 'phpdoc',
                         ...positionAt(text, nameOffset),
                     });
                 }
