@@ -3,8 +3,10 @@ import { runTests } from '@vscode/test-electron';
 
 async function main(): Promise<void> {
     const testRunId = `${Date.now()}-${process.pid}`;
-    const testDataPath = path.resolve(__dirname, '../..', '.vscode-test', `user-data-${testRunId}`);
-    const extensionDataPath = path.resolve(__dirname, '../..', '.vscode-test', `extensions-${testRunId}`);
+    const testRoot =
+        process.platform === 'darwin' ? '/tmp' : path.resolve(__dirname, '../..', '.vscode-test');
+    const testDataPath = path.join(testRoot, `pih-user-${testRunId}`);
+    const extensionDataPath = path.join(testRoot, `pih-ext-${testRunId}`);
 
     try {
         await runTests({
