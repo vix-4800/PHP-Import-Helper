@@ -68,4 +68,25 @@ class Foo
         assert.ok(!text.includes('use Exception;'));
         assert.ok(text.includes('throw new \\Exception('));
     });
+
+    test('imports namespace-qualified PHPDoc types in global scripts', () => {
+        const text = computeImportAllText(
+            `<?php
+/**
+ * @var vendor\\Package\\ViewModel $model
+ */
+?>
+<?= Widget::render($model) ?>
+`,
+            parser,
+            detector,
+            cacheWith({
+                Widget: [{ fqcn: 'App\\Ui\\Widget', source: 'project' }],
+            })
+        );
+
+        assert.ok(text.includes('use App\\Ui\\Widget;'));
+        assert.ok(text.includes('use vendor\\Package\\ViewModel;'));
+        assert.ok(text.includes('@var ViewModel $model'));
+    });
 });

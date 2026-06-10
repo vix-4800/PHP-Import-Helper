@@ -72,6 +72,15 @@ export function computeImportAllText(
         parsed.namespace,
         importManager
     );
+    if (parsed.namespace === null) {
+        text = importFullyQualifiedReferences(
+            text,
+            imported,
+            detector.detectQualifiedPhpDocReferences(text),
+            parsed.namespace,
+            importManager
+        );
+    }
 
     for (const className of detector.detectAll(text)) {
         if (imported.has(className)) {
