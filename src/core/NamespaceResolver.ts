@@ -22,6 +22,7 @@ interface NegativeLookup {
 export class NamespaceResolver {
     private static readonly negativeLookupTtlMs = 60_000;
     private readonly negativeLookupCache = new Map<string, NegativeLookup>();
+    private readonly positiveLookupCache = new Map<string, ResolvedNamespace[]>();
 
     public constructor(
         private readonly cache: CacheLike,
@@ -30,6 +31,11 @@ export class NamespaceResolver {
 
     public clearNegativeLookups(): void {
         this.negativeLookupCache.clear();
+    }
+
+    public clearLookups(): void {
+        this.positiveLookupCache.clear();
+        this.clearNegativeLookups();
     }
 
     public async resolve(className: string, activeUri?: UriLike): Promise<ResolvedNamespace[]> {
@@ -47,6 +53,11 @@ export class NamespaceResolver {
         }
 
         const cacheKey = this.negativeLookupKey(className, activeUri);
+        const positiveLookup = this.positiveLookupCache.get(cacheKey);
+        if (positiveLookup !== undefined) {
+            return positiveLookup;
+        }
+
         const negativeLookup = this.negativeLookupCache.get(cacheKey);
 
         if (
@@ -90,6 +101,7 @@ export class NamespaceResolver {
             this.negativeLookupCache.set(cacheKey, { time: Date.now() });
         } else {
             this.negativeLookupCache.delete(cacheKey);
+            this.positiveLookupCache.set(cacheKey, resolved);
         }
 
         return resolved;

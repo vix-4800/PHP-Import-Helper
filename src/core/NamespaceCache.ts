@@ -17,7 +17,7 @@ import { NamespaceCacheUpdateQueue } from './NamespaceCacheUpdateQueue';
 import { NamespaceIndex } from './NamespaceIndex';
 
 export class NamespaceCache implements vscode.Disposable {
-    private static readonly indexVersion = 1;
+    private static readonly indexVersion = 2;
     private static readonly indexFileName = 'namespace-index.json';
     private static readonly fileBatchSize = 64;
     private static readonly statBatchSize = 256;
@@ -384,10 +384,36 @@ export class NamespaceCache implements vscode.Disposable {
     }
 
     private async findIndexedPhpFiles(): Promise<vscode.Uri[]> {
-        const coarseExclude = buildIndexExcludeGlob(indexExcludePatterns());
-        const files = await vscode.workspace.findFiles('**/*.php', coarseExclude);
+        const folders = vscode.workspace.workspaceFolders ?? [];
+        if (folders.length === 0) {
+            const excludePatterns = indexExcludePatterns();
+            const files = await vscode.workspace.findFiles(
+                '**/*.php',
+                buildIndexExcludeGlob(excludePatterns)
+            );
 
-        return files.filter((uri) => this.shouldIndexWatchedUri(uri));
+            return files.filter((uri) =>
+                shouldIncludePhpFile(uri.fsPath, [process.cwd()], excludePatterns)
+            );
+        }
+
+        const files = new Map<string, vscode.Uri>();
+
+        for (const folder of folders) {
+            const excludePatterns = indexExcludePatterns(folder.uri);
+            const found = await vscode.workspace.findFiles(
+                new vscode.RelativePattern(folder, '**/*.php'),
+                buildIndexExcludeGlob(excludePatterns)
+            );
+
+            for (const uri of found) {
+                if (shouldIncludePhpFile(uri.fsPath, [folder.uri.fsPath], excludePatterns)) {
+                    files.set(uri.toString(), uri);
+                }
+            }
+        }
+
+        return [...files.values()];
     }
 
     private async mapInBatches<T, TResult>(
@@ -423,13 +449,11 @@ export class NamespaceCache implements vscode.Disposable {
     }
 
     private projectRoots(): string[] {
-        const roots = new Set(
-            (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath)
+        const roots = (vscode.workspace.workspaceFolders ?? []).map(
+            (folder) => folder.uri.fsPath
         );
 
-        roots.add(process.cwd());
-
-        return [...roots];
+        return roots.length === 0 ? [process.cwd()] : roots;
     }
 
     private async loadPersistedIndex(): Promise<boolean> {
