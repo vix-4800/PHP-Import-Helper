@@ -106,6 +106,27 @@ namespace App\\Domain {
         ]);
     });
 
+    test('creates entries from every namespace block in one file', () => {
+        const entries = NamespaceIndex.entriesFromPhpFile(
+            { fsPath: '/project/app/Domain/Types.php' },
+            `<?php
+
+namespace App\\First {
+    final class FirstType {}
+}
+
+namespace App\\Second {
+    final class SecondType {}
+}
+`
+        );
+
+        assert.deepStrictEqual(entries.map((entry) => entry.fqcn), [
+            'App\\First\\FirstType',
+            'App\\Second\\SecondType',
+        ]);
+    });
+
     test('replaces entries for a changed file', () => {
         const index = new NamespaceIndex();
         const uri = { fsPath: '/project/app/Domain/User.php' };
@@ -141,6 +162,39 @@ namespace App\\Domain {
         assert.deepStrictEqual(index.resolve('User'), []);
         assert.deepStrictEqual(index.resolve('Post').map((item) => item.fqcn), [
             'App\\Domain\\Post',
+        ]);
+    });
+
+    test('removes a file without scanning unrelated class buckets', () => {
+        const index = new NamespaceIndex();
+        const targetUri = { fsPath: '/project/app/Domain/User.php' };
+        const unrelatedEntries = Array.from({ length: 100 }, (_, indexValue) => ({
+            className: `Unrelated${indexValue}`,
+            fqcn: `App\\Domain\\Unrelated${indexValue}`,
+            uri: { fsPath: `/project/app/Domain/Unrelated${indexValue}.php` },
+        }));
+
+        index.setEntries([
+            { className: 'User', fqcn: 'App\\Domain\\User', uri: targetUri },
+            ...unrelatedEntries,
+        ]);
+
+        const classBuckets = (index as unknown as {
+            byClassName: Map<string, unknown>;
+        }).byClassName;
+        let iterations = 0;
+        const originalEntries = classBuckets.entries.bind(classBuckets);
+        classBuckets.entries = () => {
+            iterations++;
+            return originalEntries();
+        };
+
+        index.removeFile(targetUri);
+
+        assert.strictEqual(iterations, 0);
+        assert.deepStrictEqual(index.resolve('User'), []);
+        assert.deepStrictEqual(index.resolve('Unrelated99').map((item) => item.fqcn), [
+            'App\\Domain\\Unrelated99',
         ]);
     });
 });

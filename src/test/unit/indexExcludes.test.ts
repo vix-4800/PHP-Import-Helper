@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import {
     buildIndexExcludeGlob,
     defaultIndexExcludePatterns,
+    defaultResolveExcludePatterns,
     shouldIncludePhpFile,
 } from '../../utils/indexExcludes';
 
@@ -70,5 +71,11 @@ suite('index excludes', () => {
             buildIndexExcludeGlob(['**/vendor/**', '**/runtime/**']),
             '{**/vendor/**,**/runtime/**}'
         );
+    });
+
+    test('keeps vendor available to on-demand resolution by default', () => {
+        assert.ok(!defaultResolveExcludePatterns.includes('**/vendor/**'));
+        assert.ok(defaultResolveExcludePatterns.includes('**/.git/**'));
+        assert.ok(defaultResolveExcludePatterns.includes('**/node_modules/**'));
     });
 });

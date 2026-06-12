@@ -25,6 +25,43 @@ suite('NamespaceResolver', () => {
         assert.strictEqual(findCalls, 2);
     });
 
+    test('caches successful fallback lookups until cleared', async () => {
+        let findCalls = 0;
+        const resolver = new NamespaceResolver(
+            { resolve: () => [] },
+            {
+                findClassFiles: async () => {
+                    findCalls++;
+                    return [{ fsPath: '/workspace/vendor/framework/Controller.php' }];
+                },
+                readFile: async () => `<?php
+
+namespace Framework\\Web;
+
+class Controller {}
+`,
+            }
+        );
+
+        assert.deepStrictEqual(
+            (await resolver.resolve('Controller')).map((item) => item.fqcn),
+            ['Framework\\Web\\Controller']
+        );
+        assert.deepStrictEqual(
+            (await resolver.resolve('Controller')).map((item) => item.fqcn),
+            ['Framework\\Web\\Controller']
+        );
+        assert.strictEqual(findCalls, 1);
+
+        resolver.clearLookups();
+
+        assert.deepStrictEqual(
+            (await resolver.resolve('Controller')).map((item) => item.fqcn),
+            ['Framework\\Web\\Controller']
+        );
+        assert.strictEqual(findCalls, 2);
+    });
+
     test('uses workspace file search on cache miss', async () => {
         const resolver = new NamespaceResolver(
             { resolve: () => [] },
