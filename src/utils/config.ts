@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import type { SortMode } from '../types';
-import { defaultIndexExcludePatterns } from './indexExcludes';
+import {
+    defaultIndexExcludePatterns,
+    defaultResolveExcludePatterns,
+} from './indexExcludes';
 
 export function getConfig(resource?: vscode.Uri): vscode.WorkspaceConfiguration {
     return vscode.workspace.getConfiguration('phpImportHelper', resource);
@@ -24,4 +27,8 @@ export function removeDuplicateImports(resource?: vscode.Uri): boolean {
 
 export function indexExcludePatterns(resource?: vscode.Uri): string[] {
     return getConfig(resource).get<string[]>('index.exclude', defaultIndexExcludePatterns);
+}
+
+export function resolveExcludePatterns(resource?: vscode.Uri): string[] {
+    return getConfig(resource).get<string[]>('resolve.exclude', defaultResolveExcludePatterns);
 }

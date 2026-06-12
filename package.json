@@ -80,7 +80,23 @@
             "**/bootstrap/cache/**"
           ],
           "scope": "resource",
-          "description": "Glob patterns excluded from PHP indexing and workspace class file search."
+          "description": "Glob patterns excluded from background PHP indexing."
+        },
+        "phpImportHelper.resolve.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/.git/**",
+            "**/node_modules/**",
+            "**/var/cache/**",
+            "**/runtime/**",
+            "**/storage/framework/**",
+            "**/bootstrap/cache/**"
+          ],
+          "scope": "resource",
+          "description": "Glob patterns excluded from on-demand class resolution. Vendor is searched by default."
         },
         "phpImportHelper.autoSort": {
           "type": "boolean",

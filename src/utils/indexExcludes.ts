@@ -10,6 +10,10 @@ export const defaultIndexExcludePatterns = [
     '**/bootstrap/cache/**',
 ];
 
+export const defaultResolveExcludePatterns = defaultIndexExcludePatterns.filter(
+    (pattern) => pattern !== '**/vendor/**'
+);
+
 function normalizeFsPath(fsPath: string): string {
     const normalized = fsPath.replace(/\\/g, '/').replace(/\/+$/, '');
     return /^[A-Za-z]:/.test(normalized) ? normalized.toLowerCase() : normalized;

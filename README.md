@@ -48,6 +48,14 @@ VS Code extension for PHP imports and namespaces. It resolves classes from the w
         "**/storage/framework/**",
         "**/bootstrap/cache/**"
     ],
+    "phpImportHelper.resolve.exclude": [
+        "**/.git/**",
+        "**/node_modules/**",
+        "**/var/cache/**",
+        "**/runtime/**",
+        "**/storage/framework/**",
+        "**/bootstrap/cache/**"
+    ],
     "phpImportHelper.autoSort": true,
     "phpImportHelper.autoFoldUses": false,
     "phpImportHelper.sortOnSave": false,
@@ -63,6 +71,9 @@ VS Code extension for PHP imports and namespaces. It resolves classes from the w
     "phpImportHelper.performance.trace": false
 }
 ```
+
+`phpImportHelper.index.exclude` controls the background index. The default excludes `vendor` to keep indexing fast.
+When a class is missing from the index, `phpImportHelper.resolve.exclude` controls a targeted filename search in the active workspace folder. Its default keeps `vendor` searchable.
 
 ## Development
 
