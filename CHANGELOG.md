@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Added `phpImportHelper.resolve.exclude` to configure on-demand class resolution separately from background indexing.
+- Added on-demand vendor resolution to import, expand, import-all, and auto-import-on-save flows.
+
+### Changed
+
+- Improved namespace index updates by tracking entries by both class name and source file.
+- Applied workspace-folder-specific exclusion settings during indexing and class resolution.
+
+### Fixed
+
+- Fixed classes in excluded `vendor` directories not being available for imports.
+- Fixed indexing of PHP files containing multiple namespace blocks.
+
 ## [0.2.4] - 2026-06-13
 
 ### Fixed
