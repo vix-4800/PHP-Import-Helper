@@ -1,9 +1,15 @@
 import type { DetectedClassReference, ResolvedNamespace } from '../types';
 import type { DeclarationParser } from './DeclarationParser';
 import { ImportManager } from './ImportManager';
-import type { NamespaceCache } from './NamespaceCache';
 import type { PhpClassDetector } from './PhpClassDetector';
 import { builtInClasses } from './builtInClasses';
+
+export interface NamespaceLookup {
+    resolve: (
+        className: string,
+        activeUri?: { fsPath: string }
+    ) => Promise<ResolvedNamespace[]>;
+}
 
 function isSameNamespaceReference(
     namespace: string | null,
@@ -44,12 +50,13 @@ function importFullyQualifiedReferences(
     return text;
 }
 
-export function computeImportAllText(
+export async function computeImportAllText(
     text: string,
     parser: DeclarationParser,
     detector: PhpClassDetector,
-    cache: NamespaceCache
-): string {
+    resolver: NamespaceLookup,
+    activeUri?: { fsPath: string }
+): Promise<string> {
     const importManager = new ImportManager(parser);
     const parsed = parser.parse(text);
     const imported = new Set(
@@ -87,7 +94,7 @@ export function computeImportAllText(
             continue;
         }
 
-        const resolved = cache.resolve(className);
+        const resolved = await resolver.resolve(className, activeUri);
         if (isSameNamespaceReference(parsed.namespace, className, resolved)) {
             continue;
         }
