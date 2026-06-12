@@ -174,7 +174,7 @@ export class NamespaceCache implements vscode.Disposable {
         if (loaded) {
             this.onDidUpdateEmitter.fire();
             setTimeout(() => {
-                void this.reconcileInBackground();
+                void this.reconcilePersistedIndexInBackground();
             }, 0);
             return;
         }
@@ -483,6 +483,23 @@ export class NamespaceCache implements vscode.Disposable {
 
         try {
             await this.rebuildNow(undefined, generation);
+        } finally {
+            this.rebuilding = false;
+            if (this.updateQueue.size > 0) {
+                this.scheduleQueuedUpdate();
+            }
+        }
+    }
+
+    private async reconcilePersistedIndexInBackground(): Promise<void> {
+        this.rebuilding = true;
+
+        try {
+            const changed = await this.incrementalUpdate();
+            if (changed) {
+                this.schedulePersistIndex();
+                this.onDidUpdateEmitter.fire();
+            }
         } finally {
             this.rebuilding = false;
             if (this.updateQueue.size > 0) {
