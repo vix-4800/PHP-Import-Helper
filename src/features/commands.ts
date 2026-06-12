@@ -19,9 +19,9 @@ import type { CacheEntry, ResolvedNamespace } from '../types';
 import {
     getConfig,
     ignoredClasses,
-    indexExcludePatterns,
     leadingSeparator,
     removeDuplicateImports,
+    resolveExcludePatterns,
     sortMode,
 } from '../utils/config';
 import { buildIndexExcludeGlob, shouldIncludePhpFile } from '../utils/indexExcludes';
@@ -166,27 +166,39 @@ async function chooseResolved(
     return picked?.resolved ?? null;
 }
 
-function createNamespaceResolver(cache: NamespaceCache): NamespaceResolver {
+export function createNamespaceResolver(cache: NamespaceCache): NamespaceResolver {
     return new NamespaceResolver(cache, {
         findClassFiles: async (className, activeUri) => {
-            const resource = activeUri === undefined ? undefined : vscode.Uri.file(activeUri.fsPath);
-            const excludePatterns = indexExcludePatterns(resource);
-            const exclude = buildIndexExcludeGlob(excludePatterns);
-            const folder = activeUri === undefined
+            const activeResource = activeUri === undefined
                 ? undefined
-                : vscode.workspace.getWorkspaceFolder(vscode.Uri.file(activeUri.fsPath));
-            const pattern = folder === undefined
-                ? `**/${className}.php`
-                : new vscode.RelativePattern(folder, `**/${className}.php`);
-            const roots = folder === undefined
-                ? [
-                    ...(vscode.workspace.workspaceFolders ?? []).map((item) => item.uri.fsPath),
-                    process.cwd(),
-                ]
-                : [folder.uri.fsPath];
-            const files = await vscode.workspace.findFiles(pattern, exclude);
+                : vscode.Uri.file(activeUri.fsPath);
+            const activeFolder = activeResource === undefined
+                ? undefined
+                : vscode.workspace.getWorkspaceFolder(activeResource);
+            const roots = activeFolder === undefined
+                ? (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri)
+                : [activeFolder.uri];
+            if (roots.length === 0) {
+                roots.push(vscode.Uri.file(process.cwd()));
+            }
 
-            return files.filter((uri) => shouldIncludePhpFile(uri.fsPath, roots, excludePatterns));
+            const files = new Map<string, vscode.Uri>();
+            for (const root of roots) {
+                const resource = activeFolder === undefined ? root : activeResource;
+                const excludePatterns = resolveExcludePatterns(resource);
+                const found = await vscode.workspace.findFiles(
+                    new vscode.RelativePattern(root, `**/${className}.php`),
+                    buildIndexExcludeGlob(excludePatterns)
+                );
+
+                for (const uri of found) {
+                    if (shouldIncludePhpFile(uri.fsPath, [root.fsPath], excludePatterns)) {
+                        files.set(uri.toString(), uri);
+                    }
+                }
+            }
+
+            return [...files.values()];
         },
         readFile: async (uri) => Buffer.from(
             await vscode.workspace.fs.readFile(vscode.Uri.file(uri.fsPath))
@@ -309,6 +321,7 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     parser: DeclarationParser,
     cache: NamespaceCache & { indexStats: () => { indexedFiles: number; indexedClasses: number } },
+    resolver: NamespaceResolver,
     diagnostics: {
         update: (
             document: vscode.TextDocument,
@@ -321,10 +334,8 @@ export function registerCommands(
 ): void {
     const importManager = new ImportManager(parser);
     const sortManager = new SortManager(parser);
-    const resolver = createNamespaceResolver(cache);
 
     context.subscriptions.push(
-        cache.onDidUpdate(() => resolver.clearNegativeLookups()),
         vscode.commands.registerCommand(
             'phpImportHelper.rebuildIndex',
             async (fixtures?: CacheEntry[]) => {
@@ -520,7 +531,13 @@ export function registerCommands(
                 return;
             }
 
-            let text = computeImportAllText(editor.document.getText(), parser, new PhpClassDetector(), cache);
+            let text = await computeImportAllText(
+                editor.document.getText(),
+                parser,
+                new PhpClassDetector(),
+                resolver,
+                editor.document.uri
+            );
             text = sortWhenConfigured(text, editor.document.uri, sortManager);
             await replaceDocument(editor, text);
             diagnostics.update(editor.document);

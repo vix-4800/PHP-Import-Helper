@@ -9,20 +9,20 @@ export interface SaveHookOptions {
 }
 
 export interface SaveHookProcessors {
-    autoImportText: (text: string) => string;
+    autoImportText: (text: string) => Promise<string>;
     removeUnusedText: (text: string, ignoredClasses: string[]) => string;
     sortText: (text: string, mode: SortMode) => string;
 }
 
-export function computeSaveHookText(
+export async function computeSaveHookText(
     originalText: string,
     options: SaveHookOptions,
     processors: SaveHookProcessors
-): string {
+): Promise<string> {
     let text = originalText;
 
     if (options.autoImportOnSave) {
-        text = processors.autoImportText(text);
+        text = await processors.autoImportText(text);
     }
 
     if (options.removeOnSave) {
