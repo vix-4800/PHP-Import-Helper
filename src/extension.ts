@@ -7,7 +7,11 @@ import { SortManager } from './core/SortManager';
 import { AutoImportOnSave } from './features/AutoImportOnSave';
 import { CacheStatusBarController } from './features/CacheStatusBarController';
 import { PhpCodeActionProvider } from './features/CodeActionProvider';
-import { foldUsesInEditor, registerCommands } from './features/commands';
+import {
+    createNamespaceResolver,
+    foldUsesInEditor,
+    registerCommands,
+} from './features/commands';
 import { DiagnosticManager } from './features/DiagnosticManager';
 import { PerformanceMonitor } from './features/PerformanceMonitor';
 import { computeSaveHookText } from './features/saveHooks';
@@ -21,10 +25,16 @@ export function activate(context: vscode.ExtensionContext): void {
     const performanceChannel = vscode.window.createOutputChannel('PHP Import Helper Performance');
     const performance = new PerformanceMonitor(performanceChannel);
     const cache = new NamespaceCache(context.storageUri, performance);
+    const resolver = createNamespaceResolver(cache);
+    const resolverWatcher = vscode.workspace.createFileSystemWatcher('**/*.php');
+    const clearResolverLookups = (): void => resolver.clearLookups();
+    resolverWatcher.onDidCreate(clearResolverLookups);
+    resolverWatcher.onDidChange(clearResolverLookups);
+    resolverWatcher.onDidDelete(clearResolverLookups);
     const diagnostics = new DiagnosticManager(detector, parser, cache, performance);
     const importManager = new ImportManager(parser);
     const sortManager = new SortManager(parser);
-    const autoImport = new AutoImportOnSave(detector, parser, cache);
+    const autoImport = new AutoImportOnSave(detector, parser, resolver);
     const cacheStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     const cacheStatus = new CacheStatusBarController(cacheStatusItem);
     const autoFoldUses = async (editor: vscode.TextEditor | undefined): Promise<void> => {
@@ -45,10 +55,23 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         cache,
+        resolverWatcher,
         performanceChannel,
         cacheStatusItem,
         cache.onDidChangeActivity((event) => cacheStatus.handleActivity(event)),
-        cache.onDidUpdate(refreshVisibleDiagnostics),
+        cache.onDidUpdate(() => {
+            resolver.clearLookups();
+            refreshVisibleDiagnostics();
+        }),
+        vscode.workspace.onDidChangeConfiguration((event) => {
+            if (event.affectsConfiguration('phpImportHelper.resolve.exclude')) {
+                resolver.clearLookups();
+            }
+            if (event.affectsConfiguration('phpImportHelper.index.exclude')) {
+                resolver.clearLookups();
+                void cache.rebuild();
+            }
+        }),
         diagnostics,
         vscode.languages.registerCodeActionsProvider(
             { language: 'php' },
@@ -77,14 +100,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
             const originalText = event.document.getText();
             const config = getConfig(event.document.uri);
-            const text = computeSaveHookText(originalText, {
+            event.waitUntil(computeSaveHookText(originalText, {
                 autoImportOnSave: config.get<boolean>('autoImportOnSave', false),
                 removeOnSave: config.get<boolean>('removeOnSave', false),
                 sortOnSave: config.get<boolean>('sortOnSave', false),
                 sortMode: sortMode(event.document.uri),
                 ignoredClasses: ignoredClasses(event.document.uri),
             }, {
-                autoImportText: (value) => autoImport.computeTextForText(value),
+                autoImportText: async (value) =>
+                    await autoImport.computeTextForText(value, event.document.uri),
                 removeUnusedText: (value, ignored) =>
                     importManager.removeUnused(
                         value,
@@ -92,19 +116,22 @@ export function activate(context: vscode.ExtensionContext): void {
                         removeDuplicateImports(event.document.uri)
                     ),
                 sortText: (value, mode) => sortManager.sortText(value, mode),
-            });
+            }).then((text) => {
+                if (text === originalText) {
+                    return [];
+                }
 
-            if (text !== originalText) {
                 const range = new vscode.Range(
                     event.document.positionAt(0),
                     event.document.positionAt(originalText.length)
                 );
-                event.waitUntil(Promise.resolve([vscode.TextEdit.replace(range, text)]));
-            }
+
+                return [vscode.TextEdit.replace(range, text)];
+            }));
         })
     );
 
-    registerCommands(context, parser, cache, diagnostics, performance);
+    registerCommands(context, parser, cache, resolver, diagnostics, performance);
     void cache.initialize();
 
     for (const document of getVisiblePhpDocuments(vscode.window.visibleTextEditors)) {
