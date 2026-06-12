@@ -134,6 +134,28 @@ class Foo extends Controller {}
         assert.ok(text.includes('class Foo extends Controller {}'));
     });
 
+    test('import command resolves classes from vendor excluded from background indexing', async () => {
+        const className = `FallbackController${Date.now()}`;
+        await openWorkspaceFile(`vendor/framework/${className}.php`, `<?php
+
+namespace Framework\\Web;
+
+class ${className} {}
+`);
+        const editor = await openWorkspaceFile(`app/${className}Consumer.php`, `<?php
+
+class PageController extends ${className} {}
+`);
+        const position = editor.document.positionAt(getText(editor).indexOf(className));
+        editor.selection = new vscode.Selection(position, position);
+
+        await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', []);
+        await vscode.commands.executeCommand('phpImportHelper.import');
+        await wait();
+
+        assert.ok(getText(editor).includes(`use Framework\\Web\\${className};`));
+    });
+
     test('import command prefers built-in classes over cached workspace matches', async () => {
         const editor = await openPhpEditor(`<?php
 

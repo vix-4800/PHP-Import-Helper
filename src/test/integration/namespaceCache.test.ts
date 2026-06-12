@@ -107,14 +107,14 @@ suite('NamespaceCache', () => {
         cache.dispose();
     });
 
-    test('ignores persisted index with unsupported version', async () => {
+    test('ignores persisted index from the single-namespace format', async () => {
         const storage = storageUri(`version-${Date.now()}`);
         const indexUri = vscode.Uri.joinPath(storage, 'namespace-index.json');
         const className = `UnsupportedUser${Date.now()}`;
 
         await vscode.workspace.fs.createDirectory(storage);
         await vscode.workspace.fs.writeFile(indexUri, Buffer.from(JSON.stringify({
-            version: -1,
+            version: 1,
             files: {
                 'file:///project/app/Models/User.php': {
                     entries: [{ className, fqcn: `App\\Models\\${className}` }],
@@ -145,7 +145,7 @@ class ${className} {}
 
         await vscode.workspace.fs.createDirectory(storage);
         await vscode.workspace.fs.writeFile(indexUri, Buffer.from(JSON.stringify({
-            version: 1,
+            version: 2,
             files: {
                 [fileUri.toString()]: {
                     mtime: -1,
@@ -183,7 +183,7 @@ class ${className} {}
 
         await vscode.workspace.fs.createDirectory(storage);
         await vscode.workspace.fs.writeFile(indexUri, Buffer.from(JSON.stringify({
-            version: 1,
+            version: 2,
             files: {
                 [fileUri.toString()]: {
                     mtime: stat.mtime,
