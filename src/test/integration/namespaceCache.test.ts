@@ -13,6 +13,10 @@ type CacheInternals = {
     scheduleIndexFile: (uri: vscode.Uri) => void;
 };
 
+type CacheConstructorInternals = {
+    persistDebounceMs: number;
+};
+
 function storageUri(name: string): vscode.Uri {
     return vscode.Uri.joinPath(
         vscode.Uri.file(process.cwd()),
@@ -40,6 +44,20 @@ async function waitForActivityEnd(cache: NamespaceCache, phase: CacheActivityEve
             resolve();
         });
     });
+}
+
+async function waitForResolvedState(
+    predicate: () => boolean
+): Promise<void> {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < 5000) {
+        if (predicate()) {
+            return;
+        }
+
+        await wait(50);
+    }
 }
 
 suite('NamespaceCache', () => {
@@ -156,7 +174,11 @@ class ${className} {}
 
         const cache = new NamespaceCache(storage);
         await cache.initialize();
-        await wait(300);
+
+        await waitForResolvedState(() =>
+            cache.resolve(oldClassName).length === 0 &&
+            cache.resolve(className).length > 0
+        );
 
         assert.deepStrictEqual(cache.resolve(oldClassName), []);
         assert.deepStrictEqual(cache.resolve(className).map((item) => item.fqcn), [
@@ -255,36 +277,43 @@ namespace App\\Models;
 class ${secondClassName} {}
 `);
         const cache = new NamespaceCache(storage);
+        const cacheConstructor = NamespaceCache as unknown as CacheConstructorInternals;
+        const previousPersistDebounceMs = cacheConstructor.persistDebounceMs;
         const internals = cache as unknown as CacheInternals;
         const events: CacheActivityEvent[] = [];
         let updates = 0;
         let persists = 0;
 
-        internals.persistIndex = async () => {
-            persists++;
-        };
-        cache.onDidChangeActivity((event) => events.push(event));
-        cache.onDidUpdate(() => updates++);
+        try {
+            cacheConstructor.persistDebounceMs = 10;
+            internals.persistIndex = async () => {
+                persists++;
+            };
+            cache.onDidChangeActivity((event) => events.push(event));
+            cache.onDidUpdate(() => updates++);
 
-        const updateEnded = waitForActivityEnd(cache, 'update');
-        internals.scheduleIndexFile(first.document.uri);
-        internals.scheduleIndexFile(second.document.uri);
-        await updateEnded;
+            const updateEnded = waitForActivityEnd(cache, 'update');
+            internals.scheduleIndexFile(first.document.uri);
+            internals.scheduleIndexFile(second.document.uri);
+            await updateEnded;
+            await wait(50);
 
-        assert.deepStrictEqual(events, [
-            { kind: 'start', phase: 'update' },
-            { kind: 'end', phase: 'update' },
-        ]);
-        assert.strictEqual(updates, 1);
-        assert.strictEqual(persists, 1);
-        assert.deepStrictEqual(cache.resolve(firstClassName).map((item) => item.fqcn), [
-            `App\\Models\\${firstClassName}`,
-        ]);
-        assert.deepStrictEqual(cache.resolve(secondClassName).map((item) => item.fqcn), [
-            `App\\Models\\${secondClassName}`,
-        ]);
-
-        cache.dispose();
+            assert.deepStrictEqual(events, [
+                { kind: 'start', phase: 'update' },
+                { kind: 'end', phase: 'update' },
+            ]);
+            assert.strictEqual(updates, 1);
+            assert.strictEqual(persists, 1);
+            assert.deepStrictEqual(cache.resolve(firstClassName).map((item) => item.fqcn), [
+                `App\\Models\\${firstClassName}`,
+            ]);
+            assert.deepStrictEqual(cache.resolve(secondClassName).map((item) => item.fqcn), [
+                `App\\Models\\${secondClassName}`,
+            ]);
+        } finally {
+            cacheConstructor.persistDebounceMs = previousPersistDebounceMs;
+            cache.dispose();
+        }
     });
 
     test('skips watched PHP files excluded by index settings', async () => {

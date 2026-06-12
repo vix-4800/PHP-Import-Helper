@@ -53,6 +53,7 @@ export class NamespaceCache implements vscode.Disposable {
     private static readonly fileBatchSize = 64;
     private static readonly statBatchSize = 256;
     private static readonly updateDebounceMs = 1000;
+    private static readonly persistDebounceMs = 3000;
 
     private readonly index = new NamespaceIndex();
     private readonly worker: IndexWorkerClient;
@@ -126,7 +127,7 @@ export class NamespaceCache implements vscode.Disposable {
         const startedAt = Date.now();
         const generation = ++this.rebuildGeneration;
         await this.runActivity('rebuild', async () => {
-            await this.rebuildNow(fixtures, generation);
+            await this.rebuildNow(fixtures, generation, 'immediate');
         });
         const durationMs = Date.now() - startedAt;
 
@@ -142,10 +143,14 @@ export class NamespaceCache implements vscode.Disposable {
         await this.initializePromise;
     }
 
-    private async rebuildNow(fixtures?: CacheEntry[], generation = ++this.rebuildGeneration): Promise<void> {
+    private async rebuildNow(
+        fixtures?: CacheEntry[],
+        generation = ++this.rebuildGeneration,
+        persistMode: 'debounced' | 'immediate' = 'debounced'
+    ): Promise<void> {
         if (fixtures !== undefined) {
             this.setEntries(fixtures);
-            this.schedulePersistIndex();
+            await this.persistRebuiltIndex(persistMode);
             this.onDidUpdateEmitter.fire();
             return;
         }
@@ -158,7 +163,7 @@ export class NamespaceCache implements vscode.Disposable {
         }
 
         this.applySnapshot(snapshot);
-        this.schedulePersistIndex();
+        await this.persistRebuiltIndex(persistMode);
         this.onDidUpdateEmitter.fire();
     }
 
@@ -168,15 +173,15 @@ export class NamespaceCache implements vscode.Disposable {
 
         if (loaded) {
             this.onDidUpdateEmitter.fire();
-            queueMicrotask(() => {
+            setTimeout(() => {
                 void this.reconcileInBackground();
-            });
+            }, 0);
             return;
         }
 
-        queueMicrotask(() => {
-            void this.rebuild();
-        });
+        setTimeout(() => {
+            void this.reconcileInBackground();
+        }, 0);
     }
 
     private createWatcher(): void {
@@ -477,9 +482,7 @@ export class NamespaceCache implements vscode.Disposable {
         this.rebuilding = true;
 
         try {
-            await this.runActivity('rebuild', async () => {
-                await this.rebuildNow(undefined, generation);
-            });
+            await this.rebuildNow(undefined, generation);
         } finally {
             this.rebuilding = false;
             if (this.updateQueue.size > 0) {
@@ -723,6 +726,19 @@ export class NamespaceCache implements vscode.Disposable {
         });
     }
 
+    private async persistRebuiltIndex(persistMode: 'debounced' | 'immediate'): Promise<void> {
+        if (persistMode === 'immediate') {
+            if (this.persistTimer !== null) {
+                clearTimeout(this.persistTimer);
+                this.persistTimer = null;
+            }
+            await this.persistIndex();
+            return;
+        }
+
+        this.schedulePersistIndex();
+    }
+
     private schedulePersistIndex(): void {
         if (this.storageUri === undefined) {
             return;
@@ -735,6 +751,6 @@ export class NamespaceCache implements vscode.Disposable {
         this.persistTimer = setTimeout(() => {
             this.persistTimer = null;
             void this.persistIndex();
-        }, 3000);
+        }, NamespaceCache.persistDebounceMs);
     }
 }
