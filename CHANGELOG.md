@@ -11,16 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `phpImportHelper.resolve.exclude` to configure on-demand class resolution separately from background indexing.
 - Added on-demand vendor resolution to import, expand, import-all, and auto-import-on-save flows.
+- Added a bundled namespace index worker for PHP parsing and persisted-index JSON work.
 
 ### Changed
 
 - Improved namespace index updates by tracking entries by both class name and source file.
 - Applied workspace-folder-specific exclusion settings during indexing and class resolution.
+- Changed namespace cache startup to publish persisted indexes immediately and reconcile them in the background.
+- Changed namespace cache persistence to use delayed writes after in-memory updates.
 
 ### Fixed
 
 - Fixed classes in excluded `vendor` directories not being available for imports.
 - Fixed indexing of PHP files containing multiple namespace blocks.
+- Fixed PHP watcher registration being delayed until after initial index reconciliation.
 
 ## [0.2.4] - 2026-06-13
 

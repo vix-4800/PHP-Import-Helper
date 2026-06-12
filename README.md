@@ -74,6 +74,7 @@ VS Code extension for PHP imports and namespaces. It resolves classes from the w
 
 `phpImportHelper.index.exclude` controls the background index. The default excludes `vendor` to keep indexing fast.
 When a class is missing from the index, `phpImportHelper.resolve.exclude` controls a targeted filename search in the active workspace folder. Its default keeps `vendor` searchable.
+The persisted index is available immediately on startup when present; background reconciliation and PHP parsing run outside the extension host.
 
 ## Development
 
