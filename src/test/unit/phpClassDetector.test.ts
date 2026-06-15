@@ -307,6 +307,17 @@ $value = make();
         assert.deepStrictEqual(result, ['StandaloneType']);
     });
 
+    test('ignores class references in ordinary block comments', () => {
+        const text = `<?php
+/* @var HiddenType $value */
+/* @var Vendor\\Package\\HiddenModel $model */
+`;
+
+        assert.deepStrictEqual(detector.detectAll(text), []);
+        assert.deepStrictEqual(detector.detectFullyQualifiedPhpDocReferences(text), []);
+        assert.deepStrictEqual(detector.detectQualifiedPhpDocReferences(text), []);
+    });
+
     test('detects traits, catch types, static calls, and constructors', () => {
         const result = detector.detectAll(`<?php
 

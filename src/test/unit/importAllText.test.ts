@@ -91,6 +91,25 @@ class Foo
         assert.ok(text.includes('@var ViewModel $model'));
     });
 
+    test('ignores namespace-qualified types in ordinary block comments', async () => {
+        const text = await computeImportAllText(
+            `<?php
+/* @var vendor\\Package\\ViewModel $model */
+/* @var HiddenModel $hidden */
+`,
+            parser,
+            detector,
+            resolverWith({
+                HiddenModel: [{ fqcn: 'App\\Models\\HiddenModel', source: 'project' }],
+            })
+        );
+
+        assert.ok(!text.includes('use vendor\\Package\\ViewModel;'));
+        assert.ok(!text.includes('use App\\Models\\HiddenModel;'));
+        assert.ok(text.includes('/* @var vendor\\Package\\ViewModel $model */'));
+        assert.ok(text.includes('/* @var HiddenModel $hidden */'));
+    });
+
     test('imports a class resolved by asynchronous fallback', async () => {
         const text = await computeImportAllText(
             `<?php
