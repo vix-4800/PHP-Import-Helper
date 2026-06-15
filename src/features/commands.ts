@@ -19,6 +19,7 @@ import type { CacheEntry, ResolvedNamespace } from '../types';
 import {
     getConfig,
     ignoredClasses,
+    importAllOptions,
     leadingSeparator,
     removeDuplicateImports,
     resolveExcludePatterns,
@@ -536,7 +537,8 @@ export function registerCommands(
                 parser,
                 new PhpClassDetector(),
                 resolver,
-                editor.document.uri
+                editor.document.uri,
+                importAllOptions(editor.document.uri)
             );
             text = sortWhenConfigured(text, editor.document.uri, sortManager);
             await replaceDocument(editor, text);

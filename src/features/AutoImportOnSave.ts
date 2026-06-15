@@ -2,6 +2,7 @@ import type * as vscode from 'vscode';
 import type { DeclarationParser } from '../core/DeclarationParser';
 import {
     computeImportAllText,
+    type ImportAllOptions,
     type NamespaceLookup,
 } from '../core/importAllText';
 import type { PhpClassDetector } from '../core/PhpClassDetector';
@@ -19,14 +20,16 @@ export class AutoImportOnSave {
 
     public async computeTextForText(
         text: string,
-        activeUri?: { fsPath: string }
+        activeUri?: { fsPath: string },
+        options?: ImportAllOptions
     ): Promise<string> {
         return await computeImportAllText(
             text,
             this.parser,
             this.detector,
             this.resolver,
-            activeUri
+            activeUri,
+            options
         );
     }
 }
