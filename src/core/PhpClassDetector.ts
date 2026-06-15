@@ -590,7 +590,12 @@ export class PhpClassDetector {
     ): void {
         for (const comment of comments ?? []) {
             const offset = comment.offset ?? comment.loc?.start.offset;
-            if (offset === undefined || processedComments.has(offset) || comment.kind !== 'commentblock') {
+            if (
+                offset === undefined
+                || processedComments.has(offset)
+                || comment.kind !== 'commentblock'
+                || !comment.value.startsWith('/**')
+            ) {
                 continue;
             }
 
