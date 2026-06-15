@@ -64,7 +64,7 @@ suite('composer autoload', () => {
         assert.strictEqual(resolveNamespace('/project/app/Models', autoload), 'App\\Models');
     });
 
-    test('resolves Laravel-style app directory', () => {
+    test('resolves conventional app directory', () => {
         const autoload = parseAutoload({
             autoload: { 'psr-4': { 'App\\': 'app/' } },
         });

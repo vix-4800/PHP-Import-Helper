@@ -30,7 +30,7 @@ class Foo {}
         const document = `<?php
 
 use App\\Models\\{User, Post};
-use Illuminate\\Http\\Request;
+use Framework\\Http\\Request;
 
 class Foo {}
 `;

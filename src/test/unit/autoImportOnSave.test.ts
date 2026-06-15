@@ -117,11 +117,11 @@ use App\\Models\\MediaAsset;
 
         const text = await autoImport.computeText(documentWithText(`<?php
 
-use yii\\httpclient\\Client as cl;
+use Framework\\Http\\Client as cl;
 
 class Foo {
     public function run(): void {
-        new \\yii\\httpclient\\Client();
+        new \\Framework\\Http\\Client();
     }
 }
 `));
@@ -137,7 +137,7 @@ class Foo {
 
 namespace backend\\controllers;
 
-use yii\\filters\\VerbFilter;
+use Framework\\Filters\\RequestFilter;
 
 class AccessPolicyController
 {
@@ -145,19 +145,19 @@ class AccessPolicyController
     {
         return [
             'access' => [
-                'class' => \\yii\\filters\\AccessControl::class,
+                'class' => \\Framework\\Filters\\AccessPolicy::class,
             ],
             'verbs' => [
-                'class' => VerbFilter::class,
+                'class' => RequestFilter::class,
             ],
         ];
     }
 }
 `));
 
-        assert.ok(text.includes('use yii\\filters\\AccessControl;'));
-        assert.ok(text.includes("'class' => AccessControl::class"));
-        assert.strictEqual((text.match(/yii\\filters\\AccessControl/g) ?? []).length, 1);
+        assert.ok(text.includes('use Framework\\Filters\\AccessPolicy;'));
+        assert.ok(text.includes("'class' => AccessPolicy::class"));
+        assert.strictEqual((text.match(/Framework\\Filters\\AccessPolicy/g) ?? []).length, 1);
     });
 
     test('imports conflicting fully qualified classes with aliases when enabled', async () => {
@@ -194,17 +194,17 @@ class Consumer {
 
 class Foo {
     /**
-     * @return string|\\yii\\web\\Response
-     * @throws \\yii\\web\\NotFoundHttpException if the model cannot be found
+     * @return string|\\Framework\\Http\\Response
+     * @throws \\Framework\\Http\\ResourceNotFoundException if the model cannot be found
      */
     public function run() {}
 }
 `));
 
-        assert.ok(text.includes('use yii\\web\\NotFoundHttpException;'));
-        assert.ok(text.includes('use yii\\web\\Response;'));
+        assert.ok(text.includes('use Framework\\Http\\ResourceNotFoundException;'));
+        assert.ok(text.includes('use Framework\\Http\\Response;'));
         assert.ok(text.includes('@return string|Response'));
-        assert.ok(text.includes('@throws NotFoundHttpException if the model cannot be found'));
+        assert.ok(text.includes('@throws ResourceNotFoundException if the model cannot be found'));
     });
 
     test('imports fully qualified PHPDoc types inside shapes and generics on save', async () => {
@@ -215,15 +215,15 @@ class Foo {
 
 class Foo {
     /**
-     * @return array{response: \\yii\\web\\Response, errors?: list<\\yii\\web\\NotFoundHttpException>}
+     * @return array{response: \\Framework\\Http\\Response, errors?: list<\\Framework\\Http\\ResourceNotFoundException>}
      */
     public function run() {}
 }
 `));
 
-        assert.ok(text.includes('use yii\\web\\NotFoundHttpException;'));
-        assert.ok(text.includes('use yii\\web\\Response;'));
-        assert.ok(text.includes('@return array{response: Response, errors?: list<NotFoundHttpException>}'));
+        assert.ok(text.includes('use Framework\\Http\\ResourceNotFoundException;'));
+        assert.ok(text.includes('use Framework\\Http\\Response;'));
+        assert.ok(text.includes('@return array{response: Response, errors?: list<ResourceNotFoundException>}'));
     });
 
     test('imports fully qualified multiline PHPDoc types inside shapes and generics on save', async () => {
@@ -235,17 +235,17 @@ class Foo {
 class Foo {
     /**
      * @return array{
-     *     response: \\yii\\web\\Response,
-     *     errors?: list<\\yii\\web\\NotFoundHttpException>
+     *     response: \\Framework\\Http\\Response,
+     *     errors?: list<\\Framework\\Http\\ResourceNotFoundException>
      * }
      */
     public function run() {}
 }
 `));
 
-        assert.ok(text.includes('use yii\\web\\NotFoundHttpException;'));
-        assert.ok(text.includes('use yii\\web\\Response;'));
+        assert.ok(text.includes('use Framework\\Http\\ResourceNotFoundException;'));
+        assert.ok(text.includes('use Framework\\Http\\Response;'));
         assert.ok(text.includes('response: Response'));
-        assert.ok(text.includes('errors?: list<NotFoundHttpException>'));
+        assert.ok(text.includes('errors?: list<ResourceNotFoundException>'));
     });
 });

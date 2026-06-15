@@ -114,10 +114,10 @@ namespace App\\Http {
     test('returns alias for imported fully qualified class', () => {
         const result = parser.getImportedClassName(`<?php
 
-use yii\\httpclient\\Client as cl;
+use Framework\\Http\\Client as cl;
 
 class Foo {}
-`, 'yii\\httpclient\\Client');
+`, 'Framework\\Http\\Client');
 
         assert.strictEqual(result, 'cl');
     });

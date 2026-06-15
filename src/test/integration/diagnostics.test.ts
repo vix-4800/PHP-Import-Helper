@@ -111,7 +111,7 @@ class Foo extends DiagnosticCommandController {}
     test('does not report lowercase alias usages as unused', async () => {
         const diagnostics = await diagnosticsFor(`<?php
 
-use yii\\httpclient\\Client as cl;
+use Framework\\Http\\Client as cl;
 
 class Foo {
     public function run(): void {
@@ -275,7 +275,7 @@ class Foo {
 
 class Foo {
     /**
-     * @return string|\\yii\\web\\Response
+     * @return string|\\Framework\\Http\\Response
      */
     public function actionCreate() {
         return $this->redirect(['view']);
@@ -384,7 +384,7 @@ class Listener {
 
         await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
             { className: 'Event', fqcn: 'App\\Events\\Event', uri: document.uri },
-            { className: 'Event', fqcn: 'Illuminate\\Support\\Facades\\Event', uri: document.uri },
+            { className: 'Event', fqcn: 'Framework\\Support\\Event', uri: document.uri },
         ]);
         await vscode.commands.executeCommand('phpImportHelper.refreshDiagnostics', document.uri);
         await wait();
@@ -398,12 +398,12 @@ class Listener {
         const document = await createPhpDocument(`<?php
 
 class Foo implements JsonSerializable {
-    public function mock(Mockery $mock): RuntimeException {}
+    public function run(GlobalUtility $utility): RuntimeException {}
 }
 `);
 
         await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
-            { className: 'Mockery', fqcn: 'Mockery', uri: document.uri },
+            { className: 'GlobalUtility', fqcn: 'GlobalUtility', uri: document.uri },
         ]);
         await vscode.commands.executeCommand('phpImportHelper.refreshDiagnostics', document.uri);
         await wait();
@@ -412,7 +412,7 @@ class Foo implements JsonSerializable {
 
         assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'JsonSerializable'));
         assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'RuntimeException'));
-        assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'Mockery'));
+        assert.ok(!hasDiagnostic(diagnostics, DiagnosticCode.ClassNotImported, 'GlobalUtility'));
     });
 
     test('reports non-built-in global-looking classes when cache has no global entry', async () => {

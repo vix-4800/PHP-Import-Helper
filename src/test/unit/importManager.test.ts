@@ -30,18 +30,18 @@ class Foo {}
     test('replaces FQCN with imported alias', () => {
         const text = manager.replaceImportedFullyQualifiedClasses(`<?php
 
-use yii\\httpclient\\Client as cl;
+use Framework\\Http\\Client as cl;
 
 class Foo {
     public function run(): void {
-        $client->setFormat(\\yii\\httpclient\\Client::FORMAT_JSON);
-        $label = "\\yii\\httpclient\\Client::FORMAT_JSON";
+        $client->setFormat(\\Framework\\Http\\Client::FORMAT_JSON);
+        $label = "\\Framework\\Http\\Client::FORMAT_JSON";
     }
 }
 `);
 
         assert.ok(text.includes('cl::FORMAT_JSON'));
-        assert.ok(text.includes('"\\yii\\httpclient\\Client::FORMAT_JSON"'));
+        assert.ok(text.includes('"\\Framework\\Http\\Client::FORMAT_JSON"'));
     });
 
     test('replaces FQCN constructors and PHPDoc types but not heredoc content', () => {
@@ -70,18 +70,18 @@ SQL;
     test('replaces FQCN PHPDoc types inside shapes and generics', () => {
         const text = manager.replaceImportedFullyQualifiedClasses(`<?php
 
-use yii\\web\\NotFoundHttpException;
-use yii\\web\\Response;
+use Framework\\Http\\ResourceNotFoundException;
+use Framework\\Http\\Response;
 
 class Foo {
     /**
-     * @return array{response: \\yii\\web\\Response, errors?: list<\\yii\\web\\NotFoundHttpException>}
+     * @return array{response: \\Framework\\Http\\Response, errors?: list<\\Framework\\Http\\ResourceNotFoundException>}
      */
     public function run() {}
 }
 `);
 
-        assert.ok(text.includes('@return array{response: Response, errors?: list<NotFoundHttpException>}'));
+        assert.ok(text.includes('@return array{response: Response, errors?: list<ResourceNotFoundException>}'));
     });
 
     test('replaces imported PHPDoc qualified names without leading separator', () => {
@@ -250,7 +250,7 @@ class Foo {
     test('keeps lowercase alias used through static access and new expression', () => {
         const text = manager.removeUnused(`<?php
 
-use yii\\httpclient\\Client as cl;
+use Framework\\Http\\Client as cl;
 use App\\Models\\Post;
 
 class Foo {
@@ -261,7 +261,7 @@ class Foo {
 }
 `);
 
-        assert.ok(text.includes('use yii\\httpclient\\Client as cl;'));
+        assert.ok(text.includes('use Framework\\Http\\Client as cl;'));
         assert.ok(!text.includes('use App\\Models\\Post;'));
     });
 
@@ -297,13 +297,13 @@ class Foo {}
     test('preserves ignored unused imports', () => {
         const text = manager.removeUnused(`<?php
 
-use App\\Facades\\Yii;
+use Project\\Support\\ServiceRegistry;
 use App\\Models\\Post;
 
 class Foo {}
-`, ['Yii']);
+`, ['ServiceRegistry']);
 
-        assert.ok(text.includes('use App\\Facades\\Yii;'));
+        assert.ok(text.includes('use Project\\Support\\ServiceRegistry;'));
         assert.ok(!text.includes('use App\\Models\\Post;'));
     });
 });

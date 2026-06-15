@@ -596,14 +596,14 @@ class Foo {
         const text = `<?php
 
 /**
- * @return string|\\yii\\web\\Response
+ * @return string|\\Framework\\Http\\Response
  */
 function actionCreate() {}
 `;
 
         assert.deepStrictEqual(detector.detectAll(text), []);
         assert.deepStrictEqual(detector.detectFullyQualifiedReferences(text).map((item) => item.rawName), [
-            'yii\\web\\Response',
+            'Framework\\Http\\Response',
         ]);
     });
 

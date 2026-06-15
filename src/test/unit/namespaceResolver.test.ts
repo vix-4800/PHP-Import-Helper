@@ -89,19 +89,19 @@ class Request {}
         const resolver = new NamespaceResolver(
             { resolve: () => [] },
             {
-                findClassFiles: async () => [{ fsPath: '/workspace/vendor/mockery/Mockery.php' }],
+                findClassFiles: async () => [{ fsPath: '/workspace/vendor/tool/GlobalUtility.php' }],
                 readFile: async () => `<?php
 
-class Mockery {}
+class GlobalUtility {}
 `,
             }
         );
 
-        assert.deepStrictEqual(await resolver.resolve('Mockery'), [
+        assert.deepStrictEqual(await resolver.resolve('GlobalUtility'), [
             {
-                fqcn: 'Mockery',
+                fqcn: 'GlobalUtility',
                 source: 'global',
-                uri: { fsPath: '/workspace/vendor/mockery/Mockery.php' },
+                uri: { fsPath: '/workspace/vendor/tool/GlobalUtility.php' },
             },
         ]);
     });
@@ -110,9 +110,9 @@ class Mockery {}
         const resolver = new NamespaceResolver(
             {
                 resolve: () => [{
-                    fqcn: 'RectorPrefix202605\\Nette\\Utils\\JsonException',
+                    fqcn: 'ToolPrefix202605\\Vendor\\Utils\\JsonException',
                     source: 'vendor',
-                    uri: { fsPath: '/workspace/tools/rector/vendor/nette/utils/src/Utils/exceptions.php' } as never,
+                    uri: { fsPath: '/workspace/tools/analyzer/vendor/package/utils/src/Utils/exceptions.php' } as never,
                 }],
             },
             {

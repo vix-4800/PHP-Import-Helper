@@ -27,9 +27,9 @@ suite('NamespaceIndex', () => {
         const index = new NamespaceIndex();
         index.setEntries([
             {
-                className: 'Mockery',
-                fqcn: 'Mockery',
-                uri: { fsPath: '/project/vendor/mockery/mockery/library/Mockery.php' },
+                className: 'GlobalUtility',
+                fqcn: 'GlobalUtility',
+                uri: { fsPath: '/project/vendor/tool/tool/library/GlobalUtility.php' },
             },
             {
                 className: 'Controller',
@@ -38,12 +38,12 @@ suite('NamespaceIndex', () => {
             },
             {
                 className: 'Collection',
-                fqcn: 'Illuminate\\Support\\Collection',
-                uri: { fsPath: '/project/vendor/laravel/framework/src/Illuminate/Support/Collection.php' },
+                fqcn: 'Vendor\\Support\\Collection',
+                uri: { fsPath: '/project/vendor/package/framework/src/Vendor/Support/Collection.php' },
             },
         ]);
 
-        assert.deepStrictEqual(index.resolve('Mockery').map((item) => item.source), ['global']);
+        assert.deepStrictEqual(index.resolve('GlobalUtility').map((item) => item.source), ['global']);
         assert.deepStrictEqual(index.resolve('Controller').map((item) => item.source), ['project']);
         assert.deepStrictEqual(index.resolve('Collection').map((item) => item.source), ['vendor']);
     });
@@ -72,18 +72,18 @@ enum Status: string {}
 
     test('creates global entries for files without namespace', () => {
         const entries = NamespaceIndex.entriesFromPhpFile(
-            { fsPath: '/project/vendor/mockery/mockery/library/Mockery.php' },
+            { fsPath: '/project/vendor/tool/tool/library/GlobalUtility.php' },
             `<?php
 
-class Mockery {}
+class GlobalUtility {}
 `
         );
 
         assert.deepStrictEqual(entries, [
             {
-                className: 'Mockery',
-                fqcn: 'Mockery',
-                uri: { fsPath: '/project/vendor/mockery/mockery/library/Mockery.php' },
+                className: 'GlobalUtility',
+                fqcn: 'GlobalUtility',
+                uri: { fsPath: '/project/vendor/tool/tool/library/GlobalUtility.php' },
             },
         ]);
     });

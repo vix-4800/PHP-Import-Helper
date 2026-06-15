@@ -22,7 +22,7 @@ suite('importAllText', () => {
 
 namespace backend\\controllers;
 
-use yii\\filters\\VerbFilter;
+use Framework\\Filters\\RequestFilter;
 
 class AccessPolicyController
 {
@@ -30,10 +30,10 @@ class AccessPolicyController
     {
         return [
             'access' => [
-                'class' => \\yii\\filters\\AccessControl::class,
+                'class' => \\Framework\\Filters\\AccessPolicy::class,
             ],
             'verbs' => [
-                'class' => VerbFilter::class,
+                'class' => RequestFilter::class,
             ],
         ];
     }
@@ -44,9 +44,9 @@ class AccessPolicyController
             resolverWith({})
         );
 
-        assert.ok(text.includes('use yii\\filters\\AccessControl;'));
-        assert.ok(text.includes("'class' => AccessControl::class"));
-        assert.strictEqual((text.match(/yii\\filters\\AccessControl/g) ?? []).length, 1);
+        assert.ok(text.includes('use Framework\\Filters\\AccessPolicy;'));
+        assert.ok(text.includes("'class' => AccessPolicy::class"));
+        assert.strictEqual((text.match(/Framework\\Filters\\AccessPolicy/g) ?? []).length, 1);
     });
 
     test('does not import fully qualified built-in runtime classes', async () => {
@@ -161,15 +161,15 @@ class Consumer
             `<?php
 
 use First\\Exception;
-use Other\\Exception as DbException;
+use Other\\Exception as DatabaseException;
 
-class YiiDbException {}
+class FrameworkDatabaseException {}
 
 class Consumer
 {
     public function fail(): void
     {
-        throw new \\yii\\db\\Exception();
+        throw new \\Framework\\Database\\Exception();
     }
 }
 `,
@@ -183,7 +183,7 @@ class Consumer
             }
         );
 
-        assert.ok(text.includes('use yii\\db\\Exception as BaseException;'));
+        assert.ok(text.includes('use Framework\\Database\\Exception as BaseException;'));
         assert.ok(text.includes('throw new BaseException();'));
     });
 

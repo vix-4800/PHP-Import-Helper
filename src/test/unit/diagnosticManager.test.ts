@@ -504,7 +504,7 @@ class Foo {
             new DeclarationParser(),
             cacheWith({})
         );
-        const targetUri = uri('file:///workspace/yii');
+        const targetUri = uri('file:///workspace/framework');
 
         manager.update(
             documentWithText(`#!/usr/bin/env php

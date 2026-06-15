@@ -23,13 +23,13 @@ suite('save hooks', () => {
 
             const editor = await openWorkspaceFile('save-hooks/Controller.php', `<?php
 
-use yii\\httpclient\\Client as cl;
+use Framework\\Http\\Client as cl;
 use App\\Zed;
 use App\\Models\\Post;
 
 class Controller {
     public function show(Request $request): Zed {
-        return new \\yii\\httpclient\\Client();
+        return new \\Framework\\Http\\Client();
     }
 }
 `);
@@ -94,8 +94,8 @@ class Controller {
 
 class Controller {
     /**
-     * @return string|\\yii\\web\\Response
-     * @throws \\yii\\web\\NotFoundHttpException if the model cannot be found
+     * @return string|\\Framework\\Http\\Response
+     * @throws \\Framework\\Http\\ResourceNotFoundException if the model cannot be found
      */
     public function run() {}
 }
@@ -107,10 +107,10 @@ class Controller {
 
             const text = getText(editor);
 
-            assert.ok(text.includes('use yii\\web\\NotFoundHttpException;'));
-            assert.ok(text.includes('use yii\\web\\Response;'));
+            assert.ok(text.includes('use Framework\\Http\\ResourceNotFoundException;'));
+            assert.ok(text.includes('use Framework\\Http\\Response;'));
             assert.ok(text.includes('@return string|Response'));
-            assert.ok(text.includes('@throws NotFoundHttpException if the model cannot be found'));
+            assert.ok(text.includes('@throws ResourceNotFoundException if the model cannot be found'));
         } finally {
             await config.update('autoImportOnSave', previousAutoImport, vscode.ConfigurationTarget.Global);
         }
@@ -127,7 +127,7 @@ class Controller {
 
 class Controller {
     /**
-     * @return array{response: \\yii\\web\\Response, errors?: list<\\yii\\web\\NotFoundHttpException>}
+     * @return array{response: \\Framework\\Http\\Response, errors?: list<\\Framework\\Http\\ResourceNotFoundException>}
      */
     public function run() {}
 }
@@ -139,9 +139,9 @@ class Controller {
 
             const text = getText(editor);
 
-            assert.ok(text.includes('use yii\\web\\NotFoundHttpException;'));
-            assert.ok(text.includes('use yii\\web\\Response;'));
-            assert.ok(text.includes('@return array{response: Response, errors?: list<NotFoundHttpException>}'));
+            assert.ok(text.includes('use Framework\\Http\\ResourceNotFoundException;'));
+            assert.ok(text.includes('use Framework\\Http\\Response;'));
+            assert.ok(text.includes('@return array{response: Response, errors?: list<ResourceNotFoundException>}'));
         } finally {
             await config.update('autoImportOnSave', previousAutoImport, vscode.ConfigurationTarget.Global);
         }

@@ -5,19 +5,19 @@ suite('ImportAliasGenerator', () => {
     test('builds aliases from namespace segments from right to left', () => {
         assert.strictEqual(
             generateUniqueImportAlias(
-                'yii\\db\\Exception',
+                'Framework\\Database\\Exception',
                 new Set(['Exception']),
                 ['Base', 'Core']
             ),
-            'DbException'
+            'DatabaseException'
         );
         assert.strictEqual(
             generateUniqueImportAlias(
-                'yii\\db\\Exception',
-                new Set(['Exception', 'dbexception']),
+                'Framework\\Database\\Exception',
+                new Set(['Exception', 'databaseexception']),
                 ['Base', 'Core']
             ),
-            'YiiDbException'
+            'FrameworkDatabaseException'
         );
     });
 

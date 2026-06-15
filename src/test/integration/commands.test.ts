@@ -87,12 +87,12 @@ class Foo extends Controller {}
         editor.selection = new vscode.Selection(position, position);
 
         await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
-            { className: 'Controller', fqcn: 'yii\\web\\Controller', uri: editor.document.uri },
+            { className: 'Controller', fqcn: 'Framework\\Web\\Controller', uri: editor.document.uri },
         ]);
         await vscode.commands.executeCommand('phpImportHelper.expand', editor.document.uri);
         await wait();
 
-        assert.ok(getText(editor).includes('\\yii\\web\\Controller'));
+        assert.ok(getText(editor).includes('\\Framework\\Web\\Controller'));
     });
 
     test('import command sorts imports when autoSort is enabled', async () => {
@@ -124,13 +124,13 @@ class Foo extends Controller {}
         editor.selection = new vscode.Selection(position, position);
 
         await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
-            { className: 'Controller', fqcn: 'yii\\web\\Controller', uri: editor.document.uri },
+            { className: 'Controller', fqcn: 'Framework\\Web\\Controller', uri: editor.document.uri },
         ]);
         await vscode.commands.executeCommand('phpImportHelper.import', editor.document.uri);
         await wait();
 
         const text = getText(editor);
-        assert.ok(text.includes('use yii\\web\\Controller;'));
+        assert.ok(text.includes('use Framework\\Web\\Controller;'));
         assert.ok(text.includes('class Foo extends Controller {}'));
     });
 
@@ -172,7 +172,7 @@ class Foo {
         await vscode.commands.executeCommand('phpImportHelper.rebuildIndex', [
             {
                 className: 'JsonException',
-                fqcn: 'RectorPrefix202605\\Nette\\Utils\\JsonException',
+                fqcn: 'ToolPrefix202605\\Vendor\\Utils\\JsonException',
                 uri: editor.document.uri,
             },
         ]);
@@ -181,7 +181,7 @@ class Foo {
 
         const text = getText(editor);
         assert.ok(text.includes('use JsonException;'));
-        assert.ok(!text.includes('RectorPrefix202605\\Nette\\Utils\\JsonException'));
+        assert.ok(!text.includes('ToolPrefix202605\\Vendor\\Utils\\JsonException'));
     });
 
     test('import command imports selected fully qualified class without cache lookup', async () => {
@@ -257,11 +257,11 @@ class Foo extends Controller {
     test('import all command imports unique unresolved classes and cleans existing FQCN aliases', async () => {
         const editor = await openPhpEditor(`<?php
 
-use yii\\httpclient\\Client as cl;
+use Framework\\Http\\Client as cl;
 
 class Foo {
     public function show(Request $request): Response {
-        return new \\yii\\httpclient\\Client();
+        return new \\Framework\\Http\\Client();
     }
 }
 `);
@@ -277,7 +277,7 @@ class Foo {
         assert.ok(text.includes('use App\\Http\\Request;'));
         assert.ok(text.includes('use App\\Http\\Response;'));
         assert.ok(text.includes('new cl()'));
-        assert.strictEqual((text.match(/yii\\httpclient\\Client/g) ?? []).length, 1);
+        assert.strictEqual((text.match(/Framework\\Http\\Client/g) ?? []).length, 1);
     });
 
     test('import all skips ambiguous unresolved classes', async () => {
@@ -319,8 +319,8 @@ abstract class FeatureController extends FeatureBase {}
 
 class Foo {
     /**
-     * @return string|\\yii\\web\\Response
-     * @throws \\yii\\web\\NotFoundHttpException if the model cannot be found
+     * @return string|\\Framework\\Http\\Response
+     * @throws \\Framework\\Http\\ResourceNotFoundException if the model cannot be found
      */
     public function run() {}
 }
@@ -330,10 +330,10 @@ class Foo {
         await wait();
 
         const text = getText(editor);
-        assert.ok(text.includes('use yii\\web\\NotFoundHttpException;'));
-        assert.ok(text.includes('use yii\\web\\Response;'));
+        assert.ok(text.includes('use Framework\\Http\\ResourceNotFoundException;'));
+        assert.ok(text.includes('use Framework\\Http\\Response;'));
         assert.ok(text.includes('@return string|Response'));
-        assert.ok(text.includes('@throws NotFoundHttpException if the model cannot be found'));
+        assert.ok(text.includes('@throws ResourceNotFoundException if the model cannot be found'));
     });
 
     test('import all imports fully qualified PHPDoc types inside shapes and generics', async () => {
@@ -341,7 +341,7 @@ class Foo {
 
 class Foo {
     /**
-     * @return array{response: \\yii\\web\\Response, errors?: list<\\yii\\web\\NotFoundHttpException>}
+     * @return array{response: \\Framework\\Http\\Response, errors?: list<\\Framework\\Http\\ResourceNotFoundException>}
      */
     public function run() {}
 }
@@ -351,9 +351,9 @@ class Foo {
         await wait();
 
         const text = getText(editor);
-        assert.ok(text.includes('use yii\\web\\NotFoundHttpException;'));
-        assert.ok(text.includes('use yii\\web\\Response;'));
-        assert.ok(text.includes('@return array{response: Response, errors?: list<NotFoundHttpException>}'));
+        assert.ok(text.includes('use Framework\\Http\\ResourceNotFoundException;'));
+        assert.ok(text.includes('use Framework\\Http\\Response;'));
+        assert.ok(text.includes('@return array{response: Response, errors?: list<ResourceNotFoundException>}'));
     });
 
     test('import all shortens qualified PHPDoc names that are already imported', async () => {
