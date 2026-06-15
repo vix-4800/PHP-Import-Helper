@@ -160,6 +160,32 @@ class AccessPolicyController
         assert.strictEqual((text.match(/yii\\filters\\AccessControl/g) ?? []).length, 1);
     });
 
+    test('imports conflicting fully qualified classes with aliases when enabled', async () => {
+        const resolver = resolverWith({});
+        const autoImport = new AutoImportOnSave(detector, parser, resolver);
+
+        const text = await autoImport.computeTextForText(
+            `<?php
+
+use First\\MyClass;
+
+class Consumer {
+    public function create(): object {
+        return new \\Second\\MyClass();
+    }
+}
+`,
+            undefined,
+            {
+                autoAliasConflicts: true,
+                aliasPrefixes: ['Base', 'Core'],
+            }
+        );
+
+        assert.ok(text.includes('use Second\\MyClass as SecondMyClass;'));
+        assert.ok(text.includes('return new SecondMyClass();'));
+    });
+
     test('imports fully qualified PHPDoc types on save', async () => {
         const resolver = resolverWith({});
         const autoImport = new AutoImportOnSave(detector, parser, resolver);

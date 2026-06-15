@@ -108,4 +108,150 @@ class PageController extends Controller {}
 
         assert.ok(text.includes('use Framework\\Web\\Controller;'));
     });
+
+    test('imports a conflicting fully qualified class with a namespace alias', async () => {
+        const text = await computeImportAllText(
+            `<?php
+
+use First\\MyClass;
+
+class Consumer
+{
+    public function create(): object
+    {
+        return new \\Second\\MyClass();
+    }
+}
+`,
+            parser,
+            detector,
+            resolverWith({}),
+            undefined,
+            {
+                autoAliasConflicts: true,
+                aliasPrefixes: ['Base', 'Core'],
+            }
+        );
+
+        assert.ok(text.includes('use Second\\MyClass as SecondMyClass;'));
+        assert.ok(text.includes('return new SecondMyClass();'));
+    });
+
+    test('avoids imported and locally declared names when generating an alias', async () => {
+        const text = await computeImportAllText(
+            `<?php
+
+use First\\Exception;
+use Other\\Exception as DbException;
+
+class YiiDbException {}
+
+class Consumer
+{
+    public function fail(): void
+    {
+        throw new \\yii\\db\\Exception();
+    }
+}
+`,
+            parser,
+            detector,
+            resolverWith({}),
+            undefined,
+            {
+                autoAliasConflicts: true,
+                aliasPrefixes: ['Base', 'Core'],
+            }
+        );
+
+        assert.ok(text.includes('use yii\\db\\Exception as BaseException;'));
+        assert.ok(text.includes('throw new BaseException();'));
+    });
+
+    test('uses one alias for conflicting runtime and PHPDoc references', async () => {
+        const text = await computeImportAllText(
+            `<?php
+
+use First\\Response;
+
+class Consumer
+{
+    /**
+     * @return \\Vendor\\Http\\Response
+     */
+    public function create(): \\Vendor\\Http\\Response
+    {
+        return new \\Vendor\\Http\\Response();
+    }
+}
+`,
+            parser,
+            detector,
+            resolverWith({}),
+            undefined,
+            {
+                autoAliasConflicts: true,
+                aliasPrefixes: ['Base', 'Core'],
+            }
+        );
+
+        assert.strictEqual(
+            (text.match(/use Vendor\\Http\\Response as HttpResponse;/g) ?? []).length,
+            1
+        );
+        assert.ok(text.includes('@return HttpResponse'));
+        assert.ok(text.includes('function create(): HttpResponse'));
+        assert.ok(text.includes('return new HttpResponse();'));
+    });
+
+    test('aliases a conflicting fully qualified built-in class', async () => {
+        const text = await computeImportAllText(
+            `<?php
+
+use App\\JsonException;
+
+class Consumer
+{
+    public function fail(): void
+    {
+        throw new \\JsonException();
+    }
+}
+`,
+            parser,
+            detector,
+            resolverWith({}),
+            undefined,
+            {
+                autoAliasConflicts: true,
+                aliasPrefixes: ['Base', 'Core'],
+            }
+        );
+
+        assert.ok(text.includes('use JsonException as BaseJsonException;'));
+        assert.ok(text.includes('throw new BaseJsonException();'));
+    });
+
+    test('leaves conflicting fully qualified references unchanged when aliases are disabled', async () => {
+        const text = await computeImportAllText(
+            `<?php
+
+use First\\MyClass;
+
+class Consumer
+{
+    public function create(): object
+    {
+        return new \\Second\\MyClass();
+    }
+}
+`,
+            parser,
+            detector,
+            resolverWith({})
+        );
+
+        assert.ok(!text.includes('use Second\\MyClass'));
+        assert.ok(text.includes('return new \\Second\\MyClass();'));
+    });
 });
