@@ -2,7 +2,7 @@
   "name": "php-import-helper",
   "displayName": "PHP Import Helper",
   "description": "Import, expand, sort, diagnose, and manage PHP namespaces",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "icon": "icon.png",
   "publisher": "vix",
   "galleryBanner": {
