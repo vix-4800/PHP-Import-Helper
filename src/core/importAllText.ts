@@ -1,14 +1,30 @@
 import type { DetectedClassReference, ResolvedNamespace } from '../types';
 import type { DeclarationParser } from './DeclarationParser';
+import { generateUniqueImportAlias } from './ImportAliasGenerator';
 import { ImportManager } from './ImportManager';
 import type { PhpClassDetector } from './PhpClassDetector';
 import { builtInClasses } from './builtInClasses';
+
+export interface ImportAllOptions {
+    autoAliasConflicts: boolean;
+    aliasPrefixes: readonly string[];
+}
 
 export interface NamespaceLookup {
     resolve: (
         className: string,
         activeUri?: { fsPath: string }
     ) => Promise<ResolvedNamespace[]>;
+}
+
+const defaultOptions: ImportAllOptions = {
+    autoAliasConflicts: false,
+    aliasPrefixes: ['Base', 'Core'],
+};
+
+interface ImportState {
+    importedFqcns: Set<string>;
+    occupiedNames: Set<string>;
 }
 
 function isSameNamespaceReference(
@@ -29,22 +45,37 @@ function isSameNamespaceFullyQualifiedReference(namespace: string | null, fqcn: 
 
 function importFullyQualifiedReferences(
     text: string,
-    imported: Set<string>,
+    state: ImportState,
     references: readonly DetectedClassReference[],
     namespace: string | null,
-    importManager: ImportManager
+    importManager: ImportManager,
+    options: ImportAllOptions
 ): string {
     for (const reference of references) {
-        if (imported.has(reference.name) || builtInClasses.has(reference.name)) {
+        const fqcn = reference.rawName.replace(/^\\+/, '');
+        if (state.importedFqcns.has(fqcn.toLowerCase())) {
             continue;
         }
 
-        if (isSameNamespaceFullyQualifiedReference(namespace, reference.rawName)) {
+        if (isSameNamespaceFullyQualifiedReference(namespace, fqcn)) {
             continue;
         }
 
-        text = importManager.addImport(text, reference.rawName);
-        imported.add(reference.name);
+        const hasConflict = state.occupiedNames.has(reference.name.toLowerCase());
+        if (builtInClasses.has(reference.name) && !hasConflict) {
+            continue;
+        }
+
+        if (hasConflict && !options.autoAliasConflicts) {
+            continue;
+        }
+
+        const alias = hasConflict
+            ? generateUniqueImportAlias(fqcn, state.occupiedNames, options.aliasPrefixes)
+            : undefined;
+        text = importManager.addImport(text, fqcn, alias);
+        state.importedFqcns.add(fqcn.toLowerCase());
+        state.occupiedNames.add((alias ?? reference.name).toLowerCase());
     }
 
     return text;
@@ -55,42 +86,49 @@ export async function computeImportAllText(
     parser: DeclarationParser,
     detector: PhpClassDetector,
     resolver: NamespaceLookup,
-    activeUri?: { fsPath: string }
+    activeUri?: { fsPath: string },
+    options: ImportAllOptions = defaultOptions
 ): Promise<string> {
     const importManager = new ImportManager(parser);
     const parsed = parser.parse(text);
-    const imported = new Set(
-        parsed.useStatements
-            .filter((item) => item.kind === 'class')
-            .map((item) => item.className)
-    );
+    const classImports = parsed.useStatements.filter((item) => item.kind === 'class');
+    const state: ImportState = {
+        importedFqcns: new Set(classImports.map((item) => item.fqcn.toLowerCase())),
+        occupiedNames: new Set([
+            ...classImports.map((item) => item.className.toLowerCase()),
+            ...parsed.declaredClassNames.map((name) => name.toLowerCase()),
+        ]),
+    };
 
     text = importFullyQualifiedReferences(
         text,
-        imported,
+        state,
         detector.detectFullyQualifiedReferences(text),
         parsed.namespace,
-        importManager
+        importManager,
+        options
     );
     text = importFullyQualifiedReferences(
         text,
-        imported,
+        state,
         detector.detectFullyQualifiedPhpDocReferences(text),
         parsed.namespace,
-        importManager
+        importManager,
+        options
     );
     if (parsed.namespace === null) {
         text = importFullyQualifiedReferences(
             text,
-            imported,
+            state,
             detector.detectQualifiedPhpDocReferences(text),
             parsed.namespace,
-            importManager
+            importManager,
+            options
         );
     }
 
     for (const className of detector.detectAll(text)) {
-        if (imported.has(className)) {
+        if (state.occupiedNames.has(className.toLowerCase())) {
             continue;
         }
 
@@ -101,7 +139,8 @@ export async function computeImportAllText(
 
         if (resolved.length === 1) {
             text = importManager.addImport(text, resolved[0].fqcn);
-            imported.add(className);
+            state.importedFqcns.add(resolved[0].fqcn.toLowerCase());
+            state.occupiedNames.add(className.toLowerCase());
         }
     }
 
