@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added experimental automatic alias generation for conflicting fully qualified classes in import-all and auto-import-on-save flows.
 - Added `phpImportHelper.autoAliasConflicts` and `phpImportHelper.autoAliasPrefixes` settings.
 
+### Fixed
+
+- Fixed ordinary block comments being parsed as PHPDoc import references.
+
 ## [0.3.0] - 2026-06-16
 
 ### Added
