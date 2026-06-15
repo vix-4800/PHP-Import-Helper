@@ -64,6 +64,8 @@ VS Code extension for PHP imports and namespaces. It resolves classes from the w
     "phpImportHelper.removeOnSave": false,
     "phpImportHelper.removeDuplicateImports": false,
     "phpImportHelper.autoImportOnSave": false,
+    "phpImportHelper.autoAliasConflicts": false,
+    "phpImportHelper.autoAliasPrefixes": ["Base", "Core"],
     "phpImportHelper.ignoreList": [],
     "phpImportHelper.highlightNotImported": true,
     "phpImportHelper.highlightNotUsed": true,
@@ -75,6 +77,8 @@ VS Code extension for PHP imports and namespaces. It resolves classes from the w
 `phpImportHelper.index.exclude` controls the background index. The default excludes `vendor` to keep indexing fast.
 When a class is missing from the index, `phpImportHelper.resolve.exclude` controls a targeted filename search in the active workspace folder. Its default keeps `vendor` searchable.
 The persisted index is available immediately on startup when present; background reconciliation and PHP parsing run outside the extension host.
+
+`phpImportHelper.autoAliasConflicts` is experimental. When enabled, `Import All Classes` and auto-import-on-save generate aliases for explicitly qualified classes whose short names are already occupied. Namespace segments are tried first, followed by `phpImportHelper.autoAliasPrefixes` and a numeric suffix.
 
 ## Development
 

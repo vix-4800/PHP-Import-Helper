@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { ImportAllOptions } from '../core/importAllText';
 import type { SortMode } from '../types';
 import {
     defaultIndexExcludePatterns,
@@ -23,6 +24,15 @@ export function ignoredClasses(resource?: vscode.Uri): string[] {
 
 export function removeDuplicateImports(resource?: vscode.Uri): boolean {
     return getConfig(resource).get<boolean>('removeDuplicateImports', false);
+}
+
+export function importAllOptions(resource?: vscode.Uri): ImportAllOptions {
+    const config = getConfig(resource);
+
+    return {
+        autoAliasConflicts: config.get<boolean>('autoAliasConflicts', false),
+        aliasPrefixes: config.get<string[]>('autoAliasPrefixes', ['Base', 'Core']),
+    };
 }
 
 export function indexExcludePatterns(resource?: vscode.Uri): string[] {

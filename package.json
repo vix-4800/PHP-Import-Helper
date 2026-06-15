@@ -151,6 +151,30 @@
           "scope": "resource",
           "description": "Import uniquely resolved classes on save."
         },
+        "phpImportHelper.autoAliasConflicts": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "tags": [
+            "experimental"
+          ],
+          "description": "Automatically generate aliases when importing fully qualified classes whose short names are already in use."
+        },
+        "phpImportHelper.autoAliasPrefixes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Base",
+            "Core"
+          ],
+          "scope": "resource",
+          "tags": [
+            "experimental"
+          ],
+          "description": "Fallback alias prefixes used after namespace-based aliases are exhausted."
+        },
         "phpImportHelper.ignoreList": {
           "type": "array",
           "items": {
