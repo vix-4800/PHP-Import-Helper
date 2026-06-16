@@ -15,7 +15,6 @@ import {
 import { DiagnosticManager } from './features/DiagnosticManager';
 import { PerformanceMonitor } from './features/PerformanceMonitor';
 import { computeSaveHookText } from './features/saveHooks';
-import { UseFoldingRangeProvider } from './features/UseFoldingRangeProvider';
 import { getVisiblePhpDocuments } from './features/visiblePhpDocuments';
 import {
     getConfig,
@@ -85,10 +84,6 @@ export function activate(context: vscode.ExtensionContext): void {
             {
                 providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
             }
-        ),
-        vscode.languages.registerFoldingRangeProvider(
-            { language: 'php' },
-            new UseFoldingRangeProvider()
         ),
         vscode.workspace.onDidOpenTextDocument((document) => {
             diagnostics.update(document, { force: true });

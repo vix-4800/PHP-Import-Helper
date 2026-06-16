@@ -27,6 +27,7 @@ import {
 } from '../utils/config';
 import { buildIndexExcludeGlob, shouldIncludePhpFile } from '../utils/indexExcludes';
 import { PerformanceMonitor } from './PerformanceMonitor';
+import { UseFoldingRangeProvider } from './UseFoldingRangeProvider';
 import { parseClassTarget, type ClassTarget } from './commandTargets';
 
 function activePhpEditor(): vscode.TextEditor | null {
@@ -313,9 +314,18 @@ export async function foldUsesInEditor(editor: vscode.TextEditor): Promise<void>
         return;
     }
 
-    await vscode.commands.executeCommand('editor.fold', {
-        selectionLines: ranges.map((range) => range.startLine),
-    });
+    const foldingProvider = vscode.languages.registerFoldingRangeProvider(
+        { language: 'php' },
+        new UseFoldingRangeProvider()
+    );
+
+    try {
+        await vscode.commands.executeCommand('editor.fold', {
+            selectionLines: ranges.map((range) => range.startLine),
+        });
+    } finally {
+        foldingProvider.dispose();
+    }
 }
 
 export function registerCommands(
