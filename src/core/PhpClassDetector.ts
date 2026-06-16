@@ -156,9 +156,15 @@ function fallbackParameterTypeExpression(parameterList: string): string {
         .replace(/(?:&\s*)?(?:\.\.\.\s*)?\$[A-Za-z_][A-Za-z0-9_]*(?:\s*=\s*[^,]+)?/g, ' ');
 }
 
+function templatePhpDocTypeExpression(body: string): string {
+    const match = /^[A-Za-z_][A-Za-z0-9_]*\s+(?:of|as)\s+(.+)$/.exec(body.trim());
+
+    return match === null ? '' : leadingPhpDocTypeExpression(match[1]);
+}
+
 function phpDocTypeExpression(tag: string, body: string): string {
     if (tag === 'template') {
-        return body.replace(/^[A-Za-z_][A-Za-z0-9_]*\s+of\s+/, '');
+        return templatePhpDocTypeExpression(body);
     }
 
     if (tag === 'var') {
@@ -173,7 +179,14 @@ function phpDocTypeExpression(tag: string, body: string): string {
         return '';
     }
 
-    if (tag === 'return' || tag === 'throws' || tag === 'mixin' || tag === 'see') {
+    if (
+        tag === 'return' ||
+        tag === 'throws' ||
+        tag === 'mixin' ||
+        tag === 'extends' ||
+        tag === 'implements' ||
+        tag === 'see'
+    ) {
         return leadingPhpDocTypeExpression(body);
     }
 

@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed ordinary block comments being parsed as PHPDoc import references.
+- Fixed PHPDoc type tag descriptions being parsed as missing class imports.
 
 ## [0.3.0] - 2026-06-16
 

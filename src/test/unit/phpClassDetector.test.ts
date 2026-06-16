@@ -205,16 +205,18 @@ function fluent() {}
         assert.deepStrictEqual(result, []);
     });
 
-    test('ignores free-text descriptions after PHPDoc return and throws types', () => {
+    test('ignores free-text descriptions after PHPDoc type tags', () => {
         const result = detector.detectAll(`<?php
 /**
  * @return Alert the loaded model
  * @throws NotFoundHttpException if the model cannot be found
+ * @extends Repository<User> collection contract
+ * @implements Handler<Request> pipeline contract
  */
 function findModel(): Alert {}
 `);
 
-        assert.deepStrictEqual(result, ['Alert', 'NotFoundHttpException']);
+        assert.deepStrictEqual(result, ['Alert', 'NotFoundHttpException', 'Repository', 'User', 'Handler', 'Request']);
     });
 
     test('ignores PHPDoc var descriptions without variable names and unsupported tags', () => {
@@ -376,6 +378,19 @@ SQL;
         assert.ok(result.includes('Visible'));
         assert.ok(!result.includes('TModel'));
         assert.ok(!result.includes('Hidden'));
+    });
+
+    test('parses PHPDoc template bounds without descriptions', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @template T of null // generic constrained to null
+ * @template TEntity as Entity description text
+ * @template TFree generic type parameter
+ */
+final class Example {}
+`);
+
+        assert.deepStrictEqual(result, ['Entity']);
     });
 
     test('detects no-capture catch, DNF types, variadic params, and typed constants', () => {
