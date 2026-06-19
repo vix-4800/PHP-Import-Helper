@@ -87,4 +87,28 @@ suite('PerformanceMonitor', () => {
         assert.ok(text.includes('Watcher events last minute: 12'));
         assert.ok(text.includes('Ignored watcher events last minute: 5'));
     });
+
+    test('keeps watcher event storage bounded during large bursts', () => {
+        const channel: OutputChannelLike = {
+            appendLine: () => undefined,
+            show: () => undefined,
+        };
+        const monitor = new PerformanceMonitor(channel, () => 1_000);
+
+        for (let index = 0; index < 100_000; index++) {
+            monitor.recordWatcherEvent({ ignored: true });
+        }
+
+        const internals = monitor as unknown as {
+            watcherEvents: unknown[];
+            ignoredWatcherEvents: unknown[];
+        };
+
+        assert.ok(internals.watcherEvents.length <= 60);
+        assert.ok(internals.ignoredWatcherEvents.length <= 60);
+        assert.strictEqual(monitor.snapshot({
+            indexedFiles: 0,
+            indexedClasses: 0,
+        }).watcherEventsLastMinute, 100_000);
+    });
 });
