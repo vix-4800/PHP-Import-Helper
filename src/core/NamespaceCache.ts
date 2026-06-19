@@ -62,6 +62,8 @@ export class NamespaceCache implements vscode.Disposable {
     private watcher: vscode.FileSystemWatcher | null = null;
     private updateTimer: ReturnType<typeof setTimeout> | null = null;
     private persistTimer: ReturnType<typeof setTimeout> | null = null;
+    private persistPromise: Promise<void> | null = null;
+    private persistPending = false;
     private readonly updateQueue: NamespaceCacheUpdateQueue<vscode.Uri>;
     private readonly onDidUpdateEmitter = new vscode.EventEmitter<void>();
     private readonly onDidChangeActivityEmitter = new vscode.EventEmitter<CacheActivityEvent>();
@@ -201,7 +203,7 @@ export class NamespaceCache implements vscode.Disposable {
         }
         if (this.persistTimer !== null) {
             clearTimeout(this.persistTimer);
-            void this.persistIndex();
+            void this.runPersistIndex();
         }
         this.updateTimer = null;
         this.persistTimer = null;
@@ -749,7 +751,7 @@ export class NamespaceCache implements vscode.Disposable {
                 clearTimeout(this.persistTimer);
                 this.persistTimer = null;
             }
-            await this.persistIndex();
+            await this.runPersistIndex();
             return;
         }
 
@@ -767,7 +769,30 @@ export class NamespaceCache implements vscode.Disposable {
 
         this.persistTimer = setTimeout(() => {
             this.persistTimer = null;
-            void this.persistIndex();
+            void this.runPersistIndex();
         }, NamespaceCache.persistDebounceMs);
+    }
+
+    private runPersistIndex(): Promise<void> {
+        this.persistPending = true;
+
+        if (this.persistPromise !== null) {
+            return this.persistPromise;
+        }
+
+        this.persistPromise = this.drainPersistQueue();
+
+        return this.persistPromise;
+    }
+
+    private async drainPersistQueue(): Promise<void> {
+        try {
+            while (this.persistPending) {
+                this.persistPending = false;
+                await this.persistIndex();
+            }
+        } finally {
+            this.persistPromise = null;
+        }
     }
 }

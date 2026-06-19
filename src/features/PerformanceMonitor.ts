@@ -43,15 +43,21 @@ interface WatcherEvent {
     ignored: boolean;
 }
 
+interface MinuteBucket {
+    second: number;
+    count: number;
+}
+
 export class PerformanceMonitor {
     private static readonly oneMinuteMs = 60_000;
+    private static readonly bucketCount = 60;
 
     private lastDiagnosticsDurationMs: number | null = null;
     private lastUpdateDurationMs: number | null = null;
     private lastRebuildDurationMs: number | null = null;
     private persistedIndexBytes: number | null = null;
-    private readonly watcherEvents: number[] = [];
-    private readonly ignoredWatcherEvents: number[] = [];
+    private readonly watcherEvents = PerformanceMonitor.createBuckets();
+    private readonly ignoredWatcherEvents = PerformanceMonitor.createBuckets();
 
     public constructor(
         private readonly output: OutputChannelLike,
@@ -60,11 +66,10 @@ export class PerformanceMonitor {
 
     public recordWatcherEvent(event: WatcherEvent): void {
         const current = this.now();
-        this.watcherEvents.push(current);
+        this.recordEvent(this.watcherEvents, current);
         if (event.ignored) {
-            this.ignoredWatcherEvents.push(current);
+            this.recordEvent(this.ignoredWatcherEvents, current);
         }
-        this.prune(current);
     }
 
     public recordDiagnosticsUpdate(update: DiagnosticsUpdate): void {
@@ -109,7 +114,6 @@ export class PerformanceMonitor {
 
     public snapshot(index: { indexedFiles: number; indexedClasses: number }): PerformanceSnapshot {
         const current = this.now();
-        this.prune(current);
 
         return {
             indexedFiles: index.indexedFiles,
@@ -118,8 +122,8 @@ export class PerformanceMonitor {
             lastRebuildDurationMs: this.lastRebuildDurationMs,
             lastUpdateDurationMs: this.lastUpdateDurationMs,
             lastDiagnosticsDurationMs: this.lastDiagnosticsDurationMs,
-            watcherEventsLastMinute: this.watcherEvents.length,
-            ignoredWatcherEventsLastMinute: this.ignoredWatcherEvents.length,
+            watcherEventsLastMinute: this.countEvents(this.watcherEvents, current),
+            ignoredWatcherEventsLastMinute: this.countEvents(this.ignoredWatcherEvents, current),
         };
     }
 
@@ -128,18 +132,35 @@ export class PerformanceMonitor {
         this.output.show(true);
     }
 
-    private prune(current: number): void {
-        this.pruneQueue(this.watcherEvents, current);
-        this.pruneQueue(this.ignoredWatcherEvents, current);
+    private static createBuckets(): MinuteBucket[] {
+        return Array.from(
+            { length: PerformanceMonitor.bucketCount },
+            () => ({ second: -1, count: 0 })
+        );
     }
 
-    private pruneQueue(values: number[], current: number): void {
-        while (
-            values.length > 0 &&
-            current - values[0] >= PerformanceMonitor.oneMinuteMs
-        ) {
-            values.shift();
+    private recordEvent(buckets: MinuteBucket[], current: number): void {
+        const second = Math.floor(current / 1000);
+        const bucket = buckets[second % PerformanceMonitor.bucketCount];
+
+        if (bucket.second !== second) {
+            bucket.second = second;
+            bucket.count = 0;
         }
+
+        bucket.count++;
+    }
+
+    private countEvents(buckets: MinuteBucket[], current: number): number {
+        const currentSecond = Math.floor(current / 1000);
+
+        return buckets.reduce((total, bucket) => {
+            const ageMs = (currentSecond - bucket.second) * 1000;
+
+            return ageMs >= 0 && ageMs < PerformanceMonitor.oneMinuteMs
+                ? total + bucket.count
+                : total;
+        }, 0);
     }
 }
 
