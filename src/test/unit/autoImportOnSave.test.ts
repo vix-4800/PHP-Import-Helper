@@ -186,6 +186,48 @@ class Consumer {
         assert.ok(text.includes('return new SecondMyClass();'));
     });
 
+    test('aliases every unimported fully qualified class in the same conflict group', async () => {
+        const resolver = resolverWith({});
+        const autoImport = new AutoImportOnSave(detector, parser, resolver);
+
+        const text = await autoImport.computeTextForText(
+            `<?php
+
+namespace App;
+
+final class Consumer
+{
+    public function first(): void
+    {
+        throw new \\Exception('first');
+    }
+
+    public function second(): void
+    {
+        throw new \\Vendor\\Package\\Exception('second');
+    }
+
+    public function third(): void
+    {
+        throw new \\Framework\\Database\\Exception('third');
+    }
+}
+`,
+            undefined,
+            {
+                autoAliasConflicts: true,
+                aliasPrefixes: ['Base', 'Core'],
+            }
+        );
+
+        assert.ok(text.includes('use Exception as BaseException;'));
+        assert.ok(text.includes('use Vendor\\Package\\Exception as PackageException;'));
+        assert.ok(text.includes('use Framework\\Database\\Exception as DatabaseException;'));
+        assert.ok(text.includes("throw new BaseException('first');"));
+        assert.ok(text.includes("throw new PackageException('second');"));
+        assert.ok(text.includes("throw new DatabaseException('third');"));
+    });
+
     test('imports fully qualified PHPDoc types on save', async () => {
         const resolver = resolverWith({});
         const autoImport = new AutoImportOnSave(detector, parser, resolver);
