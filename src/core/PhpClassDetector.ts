@@ -153,6 +153,7 @@ function extractPhpDocTagMatches(text: string): PhpDocTag[] {
 function fallbackParameterTypeExpression(parameterList: string): string {
     return parameterList
         .replace(/#\[[^\]]*\]\s*/g, ' ')
+        .replace(/\b(?:public|protected|private)(?:\s+(?:public|protected|private)\(set\))?\s+/g, ' ')
         .replace(/(?:&\s*)?(?:\.\.\.\s*)?\$[A-Za-z_][A-Za-z0-9_]*(?:\s*=\s*[^,]+)?/g, ' ');
 }
 
@@ -691,7 +692,7 @@ export class PhpClassDetector {
         );
         addMatches(
             sanitized,
-            /\bfunction\s*(?:[A-Za-z_][A-Za-z0-9_]*)?\s*\(([^)]*)\)/g,
+            /\bfunction\s*(?:[A-Za-z_][A-Za-z0-9_]*)?\s*\(((?:[^()]|\b(?:public|protected|private)\(set\))*)\)/g,
             1,
             fallbackParameterTypeExpression
         );

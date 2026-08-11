@@ -514,6 +514,23 @@ class Foo {
         assert.deepStrictEqual(result, []);
     });
 
+    test('ignores asymmetric visibility modifiers in promoted constructor parameters', () => {
+        const result = detector.detectAll(`<?php
+
+class FixtureRecord {
+    public function __construct(
+        public protected(set) ?string $firstValue,
+        public protected(set) string $secondValue,
+        public protected(set) ?string $thirdValue,
+    ) {
+        $this->type = MarkerKind::DEFAULT;
+    }
+}
+`);
+
+        assert.deepStrictEqual(result, ['MarkerKind']);
+    });
+
     test('ignores method declaration names and params while fallback syntax is active', () => {
         const result = detector.detectAll(`<?php
 
