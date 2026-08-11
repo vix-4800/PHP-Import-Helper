@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed false missing-import diagnostics for asymmetric visibility modifiers on promoted constructor properties.
+- Fixed manual and automatic import folding without replacing or racing VS Code folding providers.
 
 ## [0.4.1] - 2026-06-19
 

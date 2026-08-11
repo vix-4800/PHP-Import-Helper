@@ -1,8 +1,14 @@
 import * as assert from 'assert';
 import Module = require('module');
 
-type DisposableLike = {
-    dispose(): void;
+type TestPosition = {
+    line: number;
+    character: number;
+};
+
+type TestSelection = {
+    anchor: TestPosition;
+    active: TestPosition;
 };
 
 type TestLine = {
@@ -15,12 +21,6 @@ type TestDocument = {
     lineAt(line: number): TestLine;
     getText(): string;
 };
-
-function disposable(onDispose: () => void): DisposableLike {
-    return {
-        dispose: onDispose,
-    };
-}
 
 function loadCommands(vscodeStub: unknown): typeof import('../../features/commands') {
     const moduleLoader = Module as typeof Module & {
@@ -42,7 +42,6 @@ function loadCommands(vscodeStub: unknown): typeof import('../../features/comman
 
     try {
         delete require.cache[require.resolve('../../features/commands')];
-        delete require.cache[require.resolve('../../features/UseFoldingRangeProvider')];
 
         return require('../../features/commands') as typeof import('../../features/commands');
     } finally {
@@ -60,55 +59,14 @@ function document(lines: string[]): TestDocument {
 }
 
 suite('foldUsesInEditor', () => {
-    test('registers an import folding provider only while folding imports', async () => {
-        let providerRegistered = false;
-        let providerDisposed = false;
-        let foldedSelectionLines: number[] | undefined;
-        const vscodeStub = {
-            FoldingRange: class {
-                public constructor(
-                    public readonly start: number,
-                    public readonly end: number,
-                    public readonly kind: string
-                ) {}
-            },
-            FoldingRangeKind: {
-                Imports: 'imports',
-            },
-            languages: {
-                registerFoldingRangeProvider: (_selector: unknown, provider: {
-                    provideFoldingRanges(document: TestDocument): unknown[];
-                }) => {
-                    providerRegistered = true;
-                    const ranges = provider.provideFoldingRanges(document([
-                        '<?php',
-                        '',
-                        'use App\\Models\\User;',
-                        'use App\\Models\\Post;',
-                        '',
-                        'class Foo {}',
-                    ]));
-
-                    assert.strictEqual(ranges.length, 1);
-
-                    return disposable(() => {
-                        providerDisposed = true;
-                    });
-                },
-            },
-            commands: {
-                executeCommand: (_command: string, options: { selectionLines: number[] }) => {
-                    assert.strictEqual(providerRegistered, true);
-                    assert.strictEqual(providerDisposed, false);
-                    foldedSelectionLines = options.selectionLines;
-
-                    return Promise.resolve();
-                },
-            },
+    test('creates manual import folds without registering a folding provider', async () => {
+        let executedCommand: string | undefined;
+        let commandSelections: TestSelection[] | undefined;
+        const originalSelection = {
+            anchor: { line: 5, character: 6 },
+            active: { line: 5, character: 6 },
         };
-        const { foldUsesInEditor } = loadCommands(vscodeStub);
-
-        await foldUsesInEditor({
+        const editor = {
             document: document([
                 '<?php',
                 '',
@@ -117,9 +75,45 @@ suite('foldUsesInEditor', () => {
                 '',
                 'class Foo {}',
             ]),
-        } as never);
+            selections: [originalSelection],
+        };
+        const vscodeStub = {
+            Position: class {
+                public constructor(
+                    public readonly line: number,
+                    public readonly character: number
+                ) {}
+            },
+            Selection: class {
+                public constructor(
+                    public readonly anchor: TestPosition,
+                    public readonly active: TestPosition
+                ) {}
+            },
+            commands: {
+                executeCommand: (command: string) => {
+                    executedCommand = command;
+                    commandSelections = [...editor.selections];
+                    editor.selections = [];
 
-        assert.deepStrictEqual(foldedSelectionLines, [2]);
-        assert.strictEqual(providerDisposed, true);
+                    return Promise.resolve();
+                },
+            },
+        };
+        const { foldUsesInEditor } = loadCommands(vscodeStub);
+
+        await foldUsesInEditor(editor as never);
+
+        assert.strictEqual(executedCommand, 'editor.createFoldingRangeFromSelection');
+        assert.deepStrictEqual(commandSelections?.map((selection) => ({
+            anchor: { ...selection.anchor },
+            active: { ...selection.active },
+        })), [
+            {
+                anchor: { line: 2, character: 0 },
+                active: { line: 3, character: 'use App\\Models\\Post;'.length },
+            },
+        ]);
+        assert.deepStrictEqual(editor.selections, [originalSelection]);
     });
 });
