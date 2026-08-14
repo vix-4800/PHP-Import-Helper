@@ -150,6 +150,23 @@ function extractPhpDocTagMatches(text: string): PhpDocTag[] {
     return parsePhpDocTags(text);
 }
 
+function declaredPhpDocTemplateNames(tags: readonly PhpDocTag[]): Set<string> {
+    const names = new Set<string>();
+
+    for (const { tag, body } of tags) {
+        if (tag !== 'template') {
+            continue;
+        }
+
+        const match = /^([A-Za-z_][A-Za-z0-9_]*)\b/.exec(body.trim());
+        if (match !== null) {
+            names.add(match[1]);
+        }
+    }
+
+    return names;
+}
+
 function fallbackParameterTypeExpression(parameterList: string): string {
     return parameterList
         .replace(/#\[[^\]]*\]\s*/g, ' ')
@@ -311,8 +328,10 @@ export class PhpClassDetector {
         for (const block of parsePhpDocBlocks(text)) {
             const phpDoc = block.text;
             const offset = block.index;
+            const tags = extractPhpDocTagMatches(phpDoc);
+            const templateNames = declaredPhpDocTemplateNames(tags);
 
-            for (const lineMatch of extractPhpDocTagMatches(phpDoc)) {
+            for (const lineMatch of tags) {
                 const { tag, body } = lineMatch;
                 const expression = phpDocTypeExpression(tag, body);
 
@@ -321,7 +340,7 @@ export class PhpClassDetector {
                     if (
                         !fullyQualified ||
                         builtInClasses.has(name) ||
-                        (/^T[A-Z]/.test(name) && !expression.includes(`of ${name}`))
+                        templateNames.has(rawName)
                     ) {
                         continue;
                     }
@@ -350,14 +369,16 @@ export class PhpClassDetector {
         for (const block of parsePhpDocBlocks(text)) {
             const phpDoc = block.text;
             const offset = block.index;
+            const tags = extractPhpDocTagMatches(phpDoc);
+            const templateNames = declaredPhpDocTemplateNames(tags);
 
-            for (const lineMatch of extractPhpDocTagMatches(phpDoc)) {
+            for (const lineMatch of tags) {
                 const { tag, body } = lineMatch;
                 const expression = phpDocTypeExpression(tag, body);
 
                 for (const reference of extractTypeReferences(expression)) {
                     const { rawName, fullyQualified, importName, importCandidate } = reference;
-                    if (fullyQualified || !rawName.includes('\\')) {
+                    if (fullyQualified || !rawName.includes('\\') || templateNames.has(rawName)) {
                         continue;
                     }
 
@@ -614,13 +635,16 @@ export class PhpClassDetector {
             }
 
             processedComments.add(offset);
-            for (const lineMatch of extractPhpDocTagMatches(comment.value)) {
+            const tags = extractPhpDocTagMatches(comment.value);
+            const templateNames = declaredPhpDocTemplateNames(tags);
+
+            for (const lineMatch of tags) {
                 const { tag, body } = lineMatch;
                 const expression = phpDocTypeExpression(tag, body);
 
                 for (const reference of extractTypeReferences(expression)) {
                     const { name, rawName, fullyQualified, importName, importCandidate } = reference;
-                    if (/^T[A-Z]/.test(name) && !expression.includes(`of ${name}`)) {
+                    if (templateNames.has(rawName)) {
                         continue;
                     }
 
@@ -737,14 +761,16 @@ export class PhpClassDetector {
         for (const block of parsePhpDocBlocks(text)) {
             const phpDoc = block.text;
             const offset = block.index;
+            const tags = extractPhpDocTagMatches(phpDoc);
+            const templateNames = declaredPhpDocTemplateNames(tags);
 
-            for (const lineMatch of extractPhpDocTagMatches(phpDoc)) {
+            for (const lineMatch of tags) {
                 const { tag, body } = lineMatch;
                 const expression = phpDocTypeExpression(tag, body);
 
                 for (const reference of extractTypeReferences(expression)) {
                     const { name, rawName, fullyQualified, importName, importCandidate } = reference;
-                    if (/^T[A-Z]/.test(name) && !expression.includes(`of ${name}`)) {
+                    if (templateNames.has(rawName)) {
                         continue;
                     }
 

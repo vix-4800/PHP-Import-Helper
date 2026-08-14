@@ -380,6 +380,20 @@ SQL;
         assert.ok(!result.includes('Hidden'));
     });
 
+    test('ignores declared one-letter PHPDoc template parameters', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @template T of object
+ * @param T|null $record
+ * @param class-string<T> $class
+ * @return T
+ */
+function requireRecord(?object $record, string $class): object {}
+`);
+
+        assert.deepStrictEqual(result, []);
+    });
+
     test('parses PHPDoc template bounds without descriptions', () => {
         const result = detector.detectAll(`<?php
 /**
