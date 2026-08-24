@@ -462,6 +462,28 @@ class Foo {
         assert.deepStrictEqual(detector.detectImportUsages(text), ['JsonException']);
     });
 
+    test('ignores PHPDoc resource and PHPStan/Psalm pseudo-types', () => {
+        const text = `<?php
+
+class StreamHolder {
+    /**
+     * @var resource
+     * @param closed-resource $closed
+     * @param open-resource $open
+     * @param non-empty-string $name
+     * @param positive-int $limit
+     * @return literal-string|numeric-string|callable-string|int-mask<1, 2, 4>|never-return
+     * @phpstan-type IgnoredAlias non-empty-array<positive-int, lowercase-string>
+     */
+    public function open($closed, $open, $name, $limit) {}
+}
+`;
+        const result = detector.detectAll(text);
+
+        assert.deepStrictEqual(result, []);
+        assert.deepStrictEqual(detector.detectImportUsages(text), []);
+    });
+
     test('keeps imported built-ins as import usages in PHPDoc and runtime code', () => {
         const text = `<?php
 

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed false missing-import diagnostics for PHPDoc resource and PHPStan/Psalm pseudo-types.
 - Fixed false missing-import diagnostics for PHPDoc generic template parameters.
 
 ## [0.4.2] - 2026-08-11
