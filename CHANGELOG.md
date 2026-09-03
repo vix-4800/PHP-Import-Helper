@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed PHPStan conditional return types so imports in conditional branches are detected.
+- Fixed `@phpstan-type` aliases being reported as missing imports and their references as unused imports.
 
 ## [0.4.3] - 2026-08-28
 

@@ -23,6 +23,7 @@ const supportedTags = new Set([
     'method',
     'see',
     'template',
+    'phpstan-type',
 ]);
 
 interface PhpDocLine {

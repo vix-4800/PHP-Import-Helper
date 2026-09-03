@@ -444,6 +444,30 @@ final class Example {}
         assert.deepStrictEqual(result, ['Entity']);
     });
 
+    test('detects PHPStan type definition references without treating aliases as imports', () => {
+        const text = `<?php
+use Example\ItemType;
+
+/**
+ * @phpstan-type ItemGroup array{
+ *     item: ItemType,
+ *     children: list<ItemType>,
+ *     count: positive-int
+ * }
+ */
+final class Example {
+    /**
+     * @param list<ItemGroup> $groups
+     */
+    public function process(array $groups): void {}
+}
+`;
+        const result = detector.detectAll(text);
+
+        assert.deepStrictEqual(result, ['ItemType']);
+        assert.deepStrictEqual(detector.detectImportUsages(text), ['ItemType']);
+    });
+
     test('detects no-capture catch, DNF types, variadic params, and typed constants', () => {
         const result = detector.detectAll(`<?php
 

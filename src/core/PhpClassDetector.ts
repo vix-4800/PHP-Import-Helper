@@ -150,17 +150,29 @@ function extractPhpDocTagMatches(text: string): PhpDocTag[] {
     return parsePhpDocTags(text);
 }
 
-function declaredPhpDocTemplateNames(tags: readonly PhpDocTag[]): Set<string> {
+function declaredPhpDocTypeNames(tags: readonly PhpDocTag[]): Set<string> {
     const names = new Set<string>();
 
     for (const { tag, body } of tags) {
-        if (tag !== 'template') {
+        if (tag !== 'template' && tag !== 'phpstan-type') {
             continue;
         }
 
         const match = /^([A-Za-z_][A-Za-z0-9_]*)\b/.exec(body.trim());
         if (match !== null) {
             names.add(match[1]);
+        }
+    }
+
+    return names;
+}
+
+function declaredPhpDocTypeNamesInText(text: string): Set<string> {
+    const names = new Set<string>();
+
+    for (const block of parsePhpDocBlocks(text)) {
+        for (const name of declaredPhpDocTypeNames(extractPhpDocTagMatches(block.text))) {
+            names.add(name);
         }
     }
 
@@ -180,9 +192,19 @@ function templatePhpDocTypeExpression(body: string): string {
     return match === null ? '' : leadingPhpDocTypeExpression(match[1]);
 }
 
+function phpStanTypeExpression(body: string): string {
+    const match = /^[A-Za-z_][A-Za-z0-9_]*\s+(.+)$/.exec(body.trim());
+
+    return match === null ? '' : leadingPhpDocTypeExpression(match[1]);
+}
+
 function phpDocTypeExpression(tag: string, body: string): string {
     if (tag === 'template') {
         return templatePhpDocTypeExpression(body);
+    }
+
+    if (tag === 'phpstan-type') {
+        return phpStanTypeExpression(body);
     }
 
     if (tag === 'var') {
@@ -324,12 +346,12 @@ export class PhpClassDetector {
 
     public detectFullyQualifiedPhpDocReferences(text: string): DetectedClassReference[] {
         const found: DetectedClassReference[] = [];
+        const phpDocTypeNames = declaredPhpDocTypeNamesInText(text);
 
         for (const block of parsePhpDocBlocks(text)) {
             const phpDoc = block.text;
             const offset = block.index;
             const tags = extractPhpDocTagMatches(phpDoc);
-            const templateNames = declaredPhpDocTemplateNames(tags);
 
             for (const lineMatch of tags) {
                 const { tag, body } = lineMatch;
@@ -340,7 +362,7 @@ export class PhpClassDetector {
                     if (
                         !fullyQualified ||
                         builtInClasses.has(name) ||
-                        templateNames.has(rawName)
+                        phpDocTypeNames.has(rawName)
                     ) {
                         continue;
                     }
@@ -365,12 +387,12 @@ export class PhpClassDetector {
 
     public detectQualifiedPhpDocReferences(text: string): DetectedClassReference[] {
         const found: DetectedClassReference[] = [];
+        const phpDocTypeNames = declaredPhpDocTypeNamesInText(text);
 
         for (const block of parsePhpDocBlocks(text)) {
             const phpDoc = block.text;
             const offset = block.index;
             const tags = extractPhpDocTagMatches(phpDoc);
-            const templateNames = declaredPhpDocTemplateNames(tags);
 
             for (const lineMatch of tags) {
                 const { tag, body } = lineMatch;
@@ -378,7 +400,7 @@ export class PhpClassDetector {
 
                 for (const reference of extractTypeReferences(expression)) {
                     const { rawName, fullyQualified, importName, importCandidate } = reference;
-                    if (fullyQualified || !rawName.includes('\\') || templateNames.has(rawName)) {
+                    if (fullyQualified || !rawName.includes('\\') || phpDocTypeNames.has(rawName)) {
                         continue;
                     }
 
@@ -404,10 +426,11 @@ export class PhpClassDetector {
         const document = this.parser.parse(text);
         const namespace = this.parser.getNamespace(document)?.name;
         const globalNamespace = namespace === undefined || namespace === null;
-        const found = this.detectAstReferences(document, globalNamespace);
+        const phpDocTypeNames = declaredPhpDocTypeNamesInText(text);
+        const found = this.detectAstReferences(document, globalNamespace, phpDocTypeNames);
 
         if (document.errors.length > 0) {
-            found.push(...this.detectFallbackReferences(text, globalNamespace));
+            found.push(...this.detectFallbackReferences(text, globalNamespace, phpDocTypeNames));
         }
 
         return this.uniqueReferences(found);
@@ -425,12 +448,16 @@ export class PhpClassDetector {
         );
     }
 
-    private detectAstReferences(document: PhpAstDocument, globalNamespace: boolean): DetectedClassReference[] {
+    private detectAstReferences(
+        document: PhpAstDocument,
+        globalNamespace: boolean,
+        phpDocTypeNames: ReadonlySet<string>
+    ): DetectedClassReference[] {
         const found: DetectedClassReference[] = [];
         const processedComments = new Set<number>();
 
         this.parser.walk(document.program, (node) => {
-            this.addPhpDocComments(found, node.leadingComments, processedComments, document.text);
+            this.addPhpDocComments(found, node.leadingComments, processedComments, document.text, phpDocTypeNames);
 
             switch (node.kind) {
                 case 'class':
@@ -621,7 +648,8 @@ export class PhpClassDetector {
         found: DetectedClassReference[],
         comments: PhpAstComment[] | undefined,
         processedComments: Set<number>,
-        text: string
+        text: string,
+        phpDocTypeNames: ReadonlySet<string>
     ): void {
         for (const comment of comments ?? []) {
             const offset = comment.offset ?? comment.loc?.start.offset;
@@ -636,7 +664,6 @@ export class PhpClassDetector {
 
             processedComments.add(offset);
             const tags = extractPhpDocTagMatches(comment.value);
-            const templateNames = declaredPhpDocTemplateNames(tags);
 
             for (const lineMatch of tags) {
                 const { tag, body } = lineMatch;
@@ -644,7 +671,7 @@ export class PhpClassDetector {
 
                 for (const reference of extractTypeReferences(expression)) {
                     const { name, rawName, fullyQualified, importName, importCandidate } = reference;
-                    if (templateNames.has(rawName)) {
+                    if (phpDocTypeNames.has(rawName)) {
                         continue;
                     }
 
@@ -664,7 +691,11 @@ export class PhpClassDetector {
         }
     }
 
-    private detectFallbackReferences(text: string, globalNamespace: boolean): DetectedClassReference[] {
+    private detectFallbackReferences(
+        text: string,
+        globalNamespace: boolean,
+        phpDocTypeNames: ReadonlySet<string>
+    ): DetectedClassReference[] {
         const sanitized = sanitizePhpCode(text, { preservePhpDoc: true });
         const found: DetectedClassReference[] = [];
 
@@ -762,7 +793,6 @@ export class PhpClassDetector {
             const phpDoc = block.text;
             const offset = block.index;
             const tags = extractPhpDocTagMatches(phpDoc);
-            const templateNames = declaredPhpDocTemplateNames(tags);
 
             for (const lineMatch of tags) {
                 const { tag, body } = lineMatch;
@@ -770,7 +800,7 @@ export class PhpClassDetector {
 
                 for (const reference of extractTypeReferences(expression)) {
                     const { name, rawName, fullyQualified, importName, importCandidate } = reference;
-                    if (templateNames.has(rawName)) {
+                    if (phpDocTypeNames.has(rawName)) {
                         continue;
                     }
 
