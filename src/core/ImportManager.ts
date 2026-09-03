@@ -90,7 +90,15 @@ export class ImportManager {
             );
         }
 
-        let result = this.fixImportDeclarations(text, classImports, canonicalImports);
+        const result = this.fixImportDeclarations(text, classImports, canonicalImports);
+        return this.fixClassCaseUsages(result, canonicalNames);
+    }
+
+    public fixClassCaseUsages(
+        text: string,
+        canonicalNames: ReadonlyMap<string, string>
+    ): string {
+        let result = text;
         const sanitized = sanitizePhpCode(result, { preservePhpDoc: true });
         const replacements = this.detector.detectReferences(result)
             .filter((item) => !item.fullyQualified && item.importName !== null)

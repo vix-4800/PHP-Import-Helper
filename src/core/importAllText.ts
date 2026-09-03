@@ -149,6 +149,10 @@ export async function computeImportAllText(
     const importManager = new ImportManager(parser);
     const parsed = parser.parse(text);
     const classImports = parsed.useStatements.filter((item) => item.kind === 'class');
+    const declaredClassNames = new Map(
+        parsed.declaredClassNames.map((className) => [className.toLowerCase(), className])
+    );
+    const sameNamespaceClassNames = new Map<string, string>();
     const state: ImportState = {
         importedFqcns: new Set(classImports.map((item) => item.fqcn.toLowerCase())),
         occupiedNames: new Set([
@@ -172,12 +176,26 @@ export async function computeImportAllText(
     );
 
     for (const className of detector.detectAll(text)) {
+        const declaredClassName = declaredClassNames.get(className.toLowerCase());
+        if (options.autoFixCase && declaredClassName !== undefined) {
+            sameNamespaceClassNames.set(className.toLowerCase(), declaredClassName);
+        }
+
         if (state.occupiedNames.has(className.toLowerCase())) {
             continue;
         }
 
         const resolved = await resolver.resolve(className, activeUri);
-        if (isSameNamespaceReference(parsed.namespace, className, resolved)) {
+        const sameNamespace = resolved.find((item) =>
+            isSameNamespaceReference(parsed.namespace, className, [item])
+        );
+        if (sameNamespace !== undefined) {
+            if (options.autoFixCase) {
+                sameNamespaceClassNames.set(
+                    className.toLowerCase(),
+                    sameNamespace.fqcn.split('\\').pop() ?? sameNamespace.fqcn
+                );
+            }
             continue;
         }
 
@@ -193,6 +211,7 @@ export async function computeImportAllText(
 
     if (options.autoFixCase) {
         text = await normalizeImportedClassCase(text, parser, resolver, activeUri);
+        text = importManager.fixClassCaseUsages(text, sameNamespaceClassNames);
     }
 
     return importManager.replaceImportedFullyQualifiedClasses(text);

@@ -181,6 +181,41 @@ class Consumer
         assert.strictEqual((text.match(/FirstUserClass/g) ?? []).length, 4);
     });
 
+    test('normalizes same-namespace class usages when case fixing is enabled', async () => {
+        const text = await computeImportAllText(
+            `<?php
+
+namespace App\\Feature;
+
+class PrimaryService
+{
+    public function create(RelatedServicE $service): RelatedServicE
+    {
+        return new RelatedServicE();
+    }
+}
+`,
+            parser,
+            detector,
+            resolverWith({
+                RelatedServicE: [{
+                    fqcn: 'App\\Feature\\RelatedService',
+                    source: 'project',
+                }],
+            }),
+            undefined,
+            {
+                autoAliasConflicts: false,
+                aliasPrefixes: ['Base', 'Core'],
+                autoFixCase: true,
+            }
+        );
+
+        assert.ok(!text.includes('use App\\Feature\\RelatedService;'));
+        assert.strictEqual((text.match(/RelatedServicE/g) ?? []).length, 0);
+        assert.strictEqual((text.match(/RelatedService/g) ?? []).length, 3);
+    });
+
     test('imports a conflicting fully qualified class with a namespace alias', async () => {
         const text = await computeImportAllText(
             `<?php
