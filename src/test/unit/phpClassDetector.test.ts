@@ -218,6 +218,30 @@ class Example {
         assert.deepStrictEqual(result, ['QueryResult']);
     });
 
+    test('ignores nested PHPStan conditional return types with scalar branches', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @param int|float $first
+ * @param int|float $second
+ * @return ($first is int ? ($second is int ? int : float) : float)
+ */
+function calculate($first, $second) {}
+`);
+
+        assert.deepStrictEqual(result, []);
+    });
+
+    test('detects references in nested PHPStan conditional return types', () => {
+        const result = detector.detectAll(`<?php
+/**
+ * @return ($first is PrimaryType ? ($second is SecondaryType ? WholeResult : FractionResult) : FractionResult)
+ */
+function calculate($first, $second) {}
+`);
+
+        assert.deepStrictEqual(result, ['PrimaryType', 'SecondaryType', 'WholeResult', 'FractionResult']);
+    });
+
     test('ignores free-text descriptions after PHPDoc type tags', () => {
         const result = detector.detectAll(`<?php
 /**
