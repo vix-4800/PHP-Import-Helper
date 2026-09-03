@@ -128,6 +128,59 @@ class PageController extends Controller {}
         assert.ok(text.includes('use Framework\\Web\\Controller;'));
     });
 
+    test('preserves the used class case when adding a missing import', async () => {
+        const text = await computeImportAllText(
+            `<?php
+
+class Consumer
+{
+    public function create(): FirstUserclass {}
+}
+`,
+            parser,
+            detector,
+            resolverWith({
+                FirstUserclass: [{ fqcn: 'App\\Models\\FirstUserClass', source: 'project' }],
+            })
+        );
+
+        assert.ok(text.includes('use App\\Models\\FirstUserclass;'));
+        assert.ok(text.includes('create(): FirstUserclass'));
+        assert.ok(!text.includes('FirstUserClass'));
+    });
+
+    test('normalizes imported class names and all usages when case fixing is enabled', async () => {
+        const text = await computeImportAllText(
+            `<?php
+
+use App\\Models\\{FirstUserclass, Other};
+
+class Consumer
+{
+    public function create(FirstUserclass $user): FirstUserclass
+    {
+        return new FirstUserclass();
+    }
+}
+`,
+            parser,
+            detector,
+            resolverWith({
+                FirstUserclass: [{ fqcn: 'App\\Models\\FirstUserClass', source: 'project' }],
+            }),
+            undefined,
+            {
+                autoAliasConflicts: false,
+                aliasPrefixes: ['Base', 'Core'],
+                autoFixCase: true,
+            }
+        );
+
+        assert.ok(text.includes('use App\\Models\\{FirstUserClass, Other};'));
+        assert.strictEqual((text.match(/FirstUserclass/g) ?? []).length, 0);
+        assert.strictEqual((text.match(/FirstUserClass/g) ?? []).length, 4);
+    });
+
     test('imports a conflicting fully qualified class with a namespace alias', async () => {
         const text = await computeImportAllText(
             `<?php

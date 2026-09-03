@@ -12,7 +12,7 @@ export class ImportManager {
         const parsed = this.parser.parse(text);
         const normalized = fqcn.replace(/^\\+/, '');
 
-        if (parsed.useStatements.some((statement) => statement.fqcn === normalized)) {
+        if (parsed.useStatements.some((statement) => statement.fqcn.toLowerCase() === normalized.toLowerCase())) {
             return text;
         }
 
@@ -32,14 +32,14 @@ export class ImportManager {
             this.parser
             .parse(text)
                 .useStatements.filter((item) => item.kind === 'class')
-                .map((item) => [item.fqcn, item.className])
+                .map((item) => [item.fqcn.toLowerCase(), item.className])
         );
         const sanitized = sanitizePhpCode(text, { preservePhpDoc: true });
         const replacements = [
             ...this.detector.detectFullyQualifiedReferences(text),
             ...this.detector.detectQualifiedPhpDocReferences(text),
         ]
-            .filter((item) => imported.has(item.rawName))
+            .filter((item) => imported.has(item.rawName.toLowerCase()))
             .filter((item) => {
                 const start = this.offsetAt(sanitized, item.line, item.character);
                 const qualifiedName = item.fullyQualified ? `\\${item.rawName}` : item.rawName;
@@ -56,7 +56,7 @@ export class ImportManager {
         let result = text;
 
         for (const reference of replacements) {
-            const alias = imported.get(reference.rawName);
+            const alias = imported.get(reference.rawName.toLowerCase());
             if (alias === undefined) {
                 continue;
             }
@@ -69,13 +69,67 @@ export class ImportManager {
         return result;
     }
 
+    public fixImportedClassCase(
+        text: string,
+        canonicalImports: ReadonlyMap<string, string>
+    ): string {
+        const parsed = this.parser.parse(text);
+        const classImports = parsed.useStatements.filter((item) => item.kind === 'class');
+        const canonicalNames = new Map<string, string>();
+
+        for (const statement of classImports) {
+            const canonical = canonicalImports.get(statement.fqcn.toLowerCase());
+            if (canonical === undefined) {
+                continue;
+            }
+
+            const canonicalName = canonical.split('\\').pop() ?? canonical;
+            canonicalNames.set(
+                statement.className.toLowerCase(),
+                statement.alias ?? canonicalName
+            );
+        }
+
+        let result = this.fixImportDeclarations(text, classImports, canonicalImports);
+        const sanitized = sanitizePhpCode(result, { preservePhpDoc: true });
+        const replacements = this.detector.detectReferences(result)
+            .filter((item) => !item.fullyQualified && item.importName !== null)
+            .map((item) => ({
+                reference: item,
+                replacement: canonicalNames.get(item.importName!.toLowerCase()),
+            }))
+            .filter((item): item is { reference: ReturnType<PhpClassDetector['detectReferences']>[number]; replacement: string } =>
+                item.replacement !== undefined && item.reference.importName !== item.replacement
+            )
+            .filter(({ reference }) => {
+                const start = this.offsetAt(sanitized, reference.line, reference.character);
+
+                return sanitized.startsWith(reference.importName!, start);
+            })
+            .sort((left, right) => {
+                if (left.reference.line !== right.reference.line) {
+                    return right.reference.line - left.reference.line;
+                }
+
+                return right.reference.character - left.reference.character;
+            });
+
+        for (const { reference, replacement } of replacements) {
+            const start = this.offsetAt(result, reference.line, reference.character);
+            const length = reference.importName!.length;
+            result = `${result.slice(0, start)}${replacement}${result.slice(start + length)}`;
+        }
+
+        return result;
+    }
+
     public removeUnused(
         text: string,
         ignoredClassNames: string[] = [],
         removeDuplicateImports = false
     ): string {
         const parsed = this.parser.parse(text);
-        const detected = new Set(this.detector.detectImportUsages(text));
+        const detected = new Set(this.detector.detectImportUsages(text).map((item) => item.toLowerCase()));
         const ignored = new Set(ignoredClassNames);
         const lines = text.split(/\r?\n/);
         const replacements = new Map<number, { endLine: number; text: string }>();
@@ -140,13 +194,68 @@ export class ImportManager {
     }
 
     private isUsed(detected: Set<string>, statement: UseStatement): boolean {
-        return detected.has(statement.className);
+        return detected.has(statement.className.toLowerCase());
     }
 
     private renderUse(statement: UseStatement): string {
         const alias = statement.alias === null ? '' : ` as ${statement.alias}`;
 
         return `use ${statement.fqcn}${alias};`;
+    }
+
+    private fixImportDeclarations(
+        text: string,
+        imports: readonly UseStatement[],
+        canonicalImports: ReadonlyMap<string, string>
+    ): string {
+        const lines = text.split(/\r?\n/);
+        const statementsByRange = new Map<string, UseStatement[]>();
+
+        for (const statement of imports) {
+            if (canonicalImports.get(statement.fqcn.toLowerCase()) === undefined) {
+                continue;
+            }
+
+            const key = `${statement.line}:${statement.endLine}`;
+            const statements = statementsByRange.get(key) ?? [];
+            statements.push(statement);
+            statementsByRange.set(key, statements);
+        }
+
+        for (const statements of statementsByRange.values()) {
+            const start = statements[0].line - 1;
+            const end = statements[0].endLine;
+            let declaration = lines.slice(start, end).join('\n');
+
+            for (const statement of statements) {
+                const canonical = canonicalImports.get(statement.fqcn.toLowerCase());
+                if (canonical === undefined) {
+                    continue;
+                }
+
+                const currentName = statement.fqcn.split('\\').pop() ?? statement.fqcn;
+                const canonicalName = canonical.split('\\').pop() ?? canonical;
+                if (currentName === canonicalName) {
+                    continue;
+                }
+
+                declaration = declaration.replace(
+                    new RegExp(
+                        `(\\buse\\s+|[\\\\{,]\\s*)${this.escapeRegExp(currentName)}(?=\\s*(?:,|}|;|\\bas\\b))`,
+                        'i'
+                    ),
+                    `$1${canonicalName}`
+                );
+            }
+
+            lines.splice(start, end - start, ...declaration.split('\n'));
+        }
+
+        return lines.join('\n');
+    }
+
+    private escapeRegExp(value: string): string {
+        return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     private offsetAt(text: string, line: number, character: number): number {

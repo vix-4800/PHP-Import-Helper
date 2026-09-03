@@ -14,7 +14,7 @@ import { PhpClassDetector } from '../core/PhpClassDetector';
 import { SortManager } from '../core/SortManager';
 import { UseFoldingRangeCalculator } from '../core/UseFoldingRangeCalculator';
 import { parseAutoload } from '../core/composer';
-import { computeImportAllText } from '../core/importAllText';
+import { computeImportAllText, normalizeImportedClassCase } from '../core/importAllText';
 import type { CacheEntry, ResolvedNamespace } from '../types';
 import {
     getConfig,
@@ -130,6 +130,13 @@ function shortName(fqcn: string): string {
     return fqcn.split('\\').pop() ?? fqcn;
 }
 
+function withClassNameCase(fqcn: string, className: string): string {
+    const parts = fqcn.split('\\');
+    parts[parts.length - 1] = className;
+
+    return parts.join('\\');
+}
+
 function sortWhenConfigured(text: string, uri: vscode.Uri, sortManager: SortManager): string {
     if (!getConfig(uri).get<boolean>('autoSort', true)) {
         return text;
@@ -232,8 +239,8 @@ async function aliasForConflict(
     const candidateName = shortName(fqcn);
     const hasConflict = parsed.useStatements.some((statement) =>
         statement.kind === 'class' &&
-        statement.className === candidateName &&
-        statement.fqcn !== fqcn
+        statement.className.toLowerCase() === candidateName.toLowerCase() &&
+        statement.fqcn.toLowerCase() !== fqcn.toLowerCase()
     );
 
     if (!hasConflict) {
@@ -250,7 +257,8 @@ async function aliasForConflict(
             }
 
             return parsed.useStatements.some((statement) =>
-                statement.kind === 'class' && statement.className === alias
+                statement.kind === 'class' &&
+                statement.className.toLowerCase() === alias.toLowerCase()
             )
                 ? 'Alias is already in use.'
                 : null;
@@ -494,10 +502,25 @@ export function registerCommands(
             }
 
             const parsed = parser.parse(editor.document.getText());
+            const options = importAllOptions(editor.document.uri);
             const existingImport = parsed.useStatements.find((statement) =>
-                statement.kind === 'class' && statement.fqcn === resolved.fqcn
+                statement.kind === 'class' && statement.fqcn.toLowerCase() === resolved.fqcn.toLowerCase()
             );
             if (existingImport !== undefined) {
+                if (options.autoFixCase) {
+                    await replaceDocument(
+                        editor,
+                        await normalizeImportedClassCase(
+                            editor.document.getText(),
+                            parser,
+                            resolver,
+                            editor.document.uri
+                        )
+                    );
+                    diagnostics.update(editor.document);
+                    return;
+                }
+
                 if (target.target.fqcn !== null) {
                     await replaceDocument(
                         editor,
@@ -522,11 +545,22 @@ export function registerCommands(
                     ? undefined
                     : resolveTargetRange(editor, target.range);
             const replacementName = alias ?? shortName(resolved.fqcn);
+            const importFqcn = target.target.fqcn === null && !options.autoFixCase
+                ? withClassNameCase(resolved.fqcn, target.target.className)
+                : resolved.fqcn;
             const textWithAlias =
                 aliasRange === undefined
                     ? originalText
                     : replaceRangeInText(editor.document, originalText, aliasRange, replacementName);
-            let importedText = importManager.addImport(textWithAlias, resolved.fqcn, alias);
+            let importedText = importManager.addImport(textWithAlias, importFqcn, alias);
+            if (options.autoFixCase) {
+                importedText = await normalizeImportedClassCase(
+                    importedText,
+                    parser,
+                    resolver,
+                    editor.document.uri
+                );
+            }
             importedText = importManager.replaceImportedFullyQualifiedClasses(importedText);
             await replaceDocument(
                 editor,

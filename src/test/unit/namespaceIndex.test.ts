@@ -23,6 +23,21 @@ suite('NamespaceIndex', () => {
         ]);
     });
 
+    test('resolves class names without regard to case', () => {
+        const index = new NamespaceIndex();
+        index.setEntries([
+            {
+                className: 'FirstUserClass',
+                fqcn: 'App\\Models\\FirstUserClass',
+                uri: { fsPath: '/project/app/Models/FirstUserClass.php' },
+            },
+        ]);
+
+        assert.deepStrictEqual(index.resolve('FirstUserclass').map((item) => item.fqcn), [
+            'App\\Models\\FirstUserClass',
+        ]);
+    });
+
     test('classifies global, project, and vendor sources', () => {
         const index = new NamespaceIndex();
         index.setEntries([

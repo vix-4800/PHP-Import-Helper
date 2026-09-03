@@ -32,6 +32,7 @@ export function importAllOptions(resource?: vscode.Uri): ImportAllOptions {
     return {
         autoAliasConflicts: config.get<boolean>('autoAliasConflicts', false),
         aliasPrefixes: config.get<string[]>('autoAliasPrefixes', ['Base', 'Core']),
+        autoFixCase: config.get<boolean>('autoFixCase', false),
     };
 }
 

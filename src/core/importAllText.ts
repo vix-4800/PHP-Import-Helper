@@ -8,6 +8,7 @@ import { builtInClasses } from './builtInClasses';
 export interface ImportAllOptions {
     autoAliasConflicts: boolean;
     aliasPrefixes: readonly string[];
+    autoFixCase?: boolean;
 }
 
 export interface NamespaceLookup {
@@ -20,6 +21,7 @@ export interface NamespaceLookup {
 const defaultOptions: ImportAllOptions = {
     autoAliasConflicts: false,
     aliasPrefixes: ['Base', 'Core'],
+    autoFixCase: false,
 };
 
 interface ImportState {
@@ -34,13 +36,45 @@ function isSameNamespaceReference(
 ): boolean {
     const expected = namespace === null ? className : `${namespace}\\${className}`;
 
-    return resolved.some((item) => item.fqcn === expected);
+    return resolved.some((item) => item.fqcn.toLowerCase() === expected.toLowerCase());
 }
 
 function isSameNamespaceFullyQualifiedReference(namespace: string | null, fqcn: string): boolean {
     const expected = namespace === null ? null : fqcn.split('\\').slice(0, -1).join('\\');
 
-    return expected !== null && expected === namespace;
+    return expected !== null && namespace !== null && expected.toLowerCase() === namespace.toLowerCase();
+}
+
+function withClassNameCase(fqcn: string, className: string): string {
+    const parts = fqcn.split('\\');
+    parts[parts.length - 1] = className;
+
+    return parts.join('\\');
+}
+
+export async function normalizeImportedClassCase(
+    text: string,
+    parser: DeclarationParser,
+    resolver: NamespaceLookup,
+    activeUri?: { fsPath: string }
+): Promise<string> {
+    const importManager = new ImportManager(parser);
+    const canonicalImports = new Map<string, string>();
+    const imports = parser.parse(text).useStatements.filter((item) => item.kind === 'class');
+
+    await Promise.all(imports.map(async (statement) => {
+        const className = statement.fqcn.split('\\').pop() ?? statement.fqcn;
+        const resolved = await resolver.resolve(className, activeUri);
+        const canonical = resolved.find((item) =>
+            item.fqcn.toLowerCase() === statement.fqcn.toLowerCase()
+        );
+
+        if (canonical !== undefined) {
+            canonicalImports.set(statement.fqcn.toLowerCase(), canonical.fqcn);
+        }
+    }));
+
+    return importManager.fixImportedClassCase(text, canonicalImports);
 }
 
 function importFullyQualifiedReferences(
@@ -148,10 +182,17 @@ export async function computeImportAllText(
         }
 
         if (resolved.length === 1) {
-            text = importManager.addImport(text, resolved[0].fqcn);
+            const fqcn = options.autoFixCase
+                ? resolved[0].fqcn
+                : withClassNameCase(resolved[0].fqcn, className);
+            text = importManager.addImport(text, fqcn);
             state.importedFqcns.add(resolved[0].fqcn.toLowerCase());
             state.occupiedNames.add(className.toLowerCase());
         }
+    }
+
+    if (options.autoFixCase) {
+        text = await normalizeImportedClassCase(text, parser, resolver, activeUri);
     }
 
     return importManager.replaceImportedFullyQualifiedClasses(text);

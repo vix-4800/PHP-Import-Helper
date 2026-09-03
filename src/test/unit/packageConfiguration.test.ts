@@ -41,4 +41,22 @@ suite('package configuration', () => {
             undefined
         );
     });
+
+    test('declares automatic class case fixing as a resource setting', () => {
+        const packageJson = JSON.parse(
+            fs.readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')
+        ) as {
+            contributes: {
+                configuration: {
+                    properties: Record<string, ConfigurationProperty & { scope?: string }>;
+                };
+            };
+        };
+        const setting = packageJson.contributes.configuration.properties[
+            'phpImportHelper.autoFixCase'
+        ];
+
+        assert.strictEqual(setting?.default, false);
+        assert.strictEqual(setting?.scope, 'resource');
+    });
 });

@@ -77,12 +77,12 @@ export class DiagnosticManager implements vscode.Disposable {
         const imported = new Set(
             parsed.useStatements
                 .filter((item) => item.kind === 'class')
-                .map((item) => item.className)
+                .map((item) => item.className.toLowerCase())
         );
-        const declared = new Set(parsed.declaredClassNames);
+        const declared = new Set(parsed.declaredClassNames.map((item) => item.toLowerCase()));
         const detected = this.detector.filterImportCandidates(analysis.references);
-        const detectedNames = new Set(detected.map((item) => item.name));
-        const importUsages = new Set(analysis.importUsages);
+        const detectedNames = new Set(detected.map((item) => item.name.toLowerCase()));
+        const importUsages = new Set(analysis.importUsages.map((item) => item.toLowerCase()));
         const diagnostics: vscode.Diagnostic[] = [];
         const seenImports = new Set<string>();
 
@@ -113,8 +113,8 @@ export class DiagnosticManager implements vscode.Disposable {
             for (const item of detected) {
                 if (
                     ignored.has(item.name) ||
-                    imported.has(item.name) ||
-                    declared.has(item.name) ||
+                    imported.has(item.name.toLowerCase()) ||
+                    declared.has(item.name.toLowerCase()) ||
                     builtInClasses.has(item.name)
                 ) {
                     continue;
@@ -147,7 +147,10 @@ export class DiagnosticManager implements vscode.Disposable {
                     continue;
                 }
 
-                if (!detectedNames.has(statement.className) && !importUsages.has(statement.className)) {
+                if (
+                    !detectedNames.has(statement.className.toLowerCase()) &&
+                    !importUsages.has(statement.className.toLowerCase())
+                ) {
                     const range = new vscode.Range(
                         statement.line - 1,
                         0,

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Added
+
+- Added case-insensitive PHP class import resolution and the `phpImportHelper.autoFixCase` setting to normalize imports and usages when importing classes.
+
 ### Fixed
 
 - Fixed PHPStan conditional return types so imports in conditional branches are detected.

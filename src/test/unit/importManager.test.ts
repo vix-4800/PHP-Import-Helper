@@ -265,6 +265,23 @@ class Foo {
         assert.ok(!text.includes('use App\\Models\\Post;'));
     });
 
+    test('keeps imports used with different class-name case', () => {
+        const text = manager.removeUnused(`<?php
+
+use App\\Models\\FirstUserClass;
+use App\\Models\\Post;
+
+class Foo {
+    public function user(FirstUserclass $user): FirstUserclass {
+        return $user;
+    }
+}
+`);
+
+        assert.ok(text.includes('use App\\Models\\FirstUserClass;'));
+        assert.ok(!text.includes('use App\\Models\\Post;'));
+    });
+
     test('keeps imported traits used inside a class body', () => {
         const text = manager.removeUnused(`<?php
 

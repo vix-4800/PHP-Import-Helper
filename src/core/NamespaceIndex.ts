@@ -81,25 +81,26 @@ export class NamespaceIndex {
         }
 
         for (const entry of entries) {
-            const classEntries = this.byClassName.get(entry.className) ?? [];
+            const classEntries = this.byClassName.get(entry.className.toLowerCase()) ?? [];
             const remaining = classEntries.filter((candidate) =>
                 candidate.uri.fsPath !== uri.fsPath
             );
             if (remaining.length === 0) {
-                this.byClassName.delete(entry.className);
+                this.byClassName.delete(entry.className.toLowerCase());
                 continue;
             }
 
-            this.byClassName.set(entry.className, remaining);
+            this.byClassName.set(entry.className.toLowerCase(), remaining);
         }
 
         this.byUri.delete(uri.fsPath);
     }
 
     public add(entry: IndexedEntry): void {
-        const classEntries = this.byClassName.get(entry.className) ?? [];
+        const className = entry.className.toLowerCase();
+        const classEntries = this.byClassName.get(className) ?? [];
         classEntries.push(entry);
-        this.byClassName.set(entry.className, classEntries);
+        this.byClassName.set(className, classEntries);
 
         const uriEntries = this.byUri.get(entry.uri.fsPath) ?? [];
         uriEntries.push(entry);
@@ -107,7 +108,7 @@ export class NamespaceIndex {
     }
 
     public lookup(className: string): IndexedEntry[] {
-        return this.byClassName.get(className) ?? [];
+        return this.byClassName.get(className.toLowerCase()) ?? [];
     }
 
     public resolve(className: string): ResolvedNamespace[] {

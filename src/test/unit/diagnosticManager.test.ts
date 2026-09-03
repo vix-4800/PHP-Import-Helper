@@ -422,7 +422,7 @@ use App\\Models\\User;
 use App\\Models\\User;
 
 class Foo {
-    public function user(User $user): User {
+    public function user(user $user): user {
         return $user;
     }
 }
