@@ -205,6 +205,19 @@ function fluent() {}
         assert.deepStrictEqual(result, []);
     });
 
+    test('detects PHPStan conditional return types', () => {
+        const result = detector.detectAll(`<?php
+class Example {
+    /**
+     * @return ($asQuery is true ? QueryResult : list<self>)
+     */
+    public function fetch(bool $asQuery) {}
+}
+`);
+
+        assert.deepStrictEqual(result, ['QueryResult']);
+    });
+
     test('ignores free-text descriptions after PHPDoc type tags', () => {
         const result = detector.detectAll(`<?php
 /**

@@ -173,6 +173,82 @@ function skipVariable(expression: string, start: number): number {
     return index;
 }
 
+function hasUnmatchedConditionalQuestion(expression: string, end: number): boolean {
+    const questions = new Map<string, number>();
+    let angleDepth = 0;
+    let roundDepth = 0;
+    let curlyDepth = 0;
+    let squareDepth = 0;
+
+    const depthKey = (): string => `${angleDepth}:${roundDepth}:${curlyDepth}:${squareDepth}`;
+
+    for (let index = 0; index < end; index++) {
+        const current = expression[index];
+
+        if (current === '<') {
+            angleDepth++;
+            continue;
+        }
+
+        if (current === '>') {
+            angleDepth = Math.max(0, angleDepth - 1);
+            continue;
+        }
+
+        if (current === '(') {
+            roundDepth++;
+            continue;
+        }
+
+        if (current === ')') {
+            roundDepth = Math.max(0, roundDepth - 1);
+            continue;
+        }
+
+        if (current === '{') {
+            curlyDepth++;
+            continue;
+        }
+
+        if (current === '}') {
+            curlyDepth = Math.max(0, curlyDepth - 1);
+            continue;
+        }
+
+        if (current === '[') {
+            squareDepth++;
+            continue;
+        }
+
+        if (current === ']') {
+            squareDepth = Math.max(0, squareDepth - 1);
+            continue;
+        }
+
+        const key = depthKey();
+        if (current === '?') {
+            let next = index + 1;
+            while (/\s/.test(expression[next] ?? '')) {
+                next++;
+            }
+
+            if (expression[next] !== ':') {
+                questions.set(key, (questions.get(key) ?? 0) + 1);
+            }
+            continue;
+        }
+
+        if (current === ':' && expression[index + 1] !== ':') {
+            const count = questions.get(key) ?? 0;
+            if (count > 0) {
+                questions.set(key, count - 1);
+            }
+        }
+    }
+
+    return (questions.get(depthKey()) ?? 0) > 0;
+}
+
 function isShapeKey(expression: string, end: number): boolean {
     let index = end;
 
@@ -187,7 +263,11 @@ function isShapeKey(expression: string, end: number): boolean {
         }
     }
 
-    return expression[index] === ':' && expression[index + 1] !== ':';
+    return (
+        expression[index] === ':' &&
+        expression[index + 1] !== ':' &&
+        !hasUnmatchedConditionalQuestion(expression, index)
+    );
 }
 
 export function parsePhpDocTypeReferences(expression: string): PhpDocTypeReference[] {
