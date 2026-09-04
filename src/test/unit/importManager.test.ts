@@ -131,6 +131,25 @@ class Foo {
         assert.ok(!text.includes('use App\\Models\\Post;'));
     });
 
+    test('keeps imports used as PHPStan imported type sources', () => {
+        const text = manager.removeUnused(`<?php
+
+use Fixture\\TypeSource;
+use Fixture\\UnusedTypeSource;
+
+/**
+ * @phpstan-import-type LocalType from TypeSource
+ */
+class Subject {
+    /** @param LocalType $value */
+    public function process($value): void {}
+}
+`);
+
+        assert.ok(text.includes('use Fixture\\TypeSource;'));
+        assert.ok(!text.includes('use Fixture\\UnusedTypeSource;'));
+    });
+
     test('keeps imports used as PHPDoc namespace prefixes', () => {
         const text = manager.removeUnused(`<?php
 

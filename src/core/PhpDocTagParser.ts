@@ -24,6 +24,7 @@ const supportedTags = new Set([
     'see',
     'template',
     'phpstan-type',
+    'phpstan-import-type',
 ]);
 
 interface PhpDocLine {
@@ -77,6 +78,10 @@ function normalizePhpDocLine(rawLine: string, lineOffset: number): PhpDocLine {
         }
     } else if (rawLine[index] === '*') {
         while (rawLine[index] === '*') {
+            index++;
+        }
+
+        if (rawLine[index] === '/') {
             index++;
         }
     }

@@ -154,13 +154,19 @@ function declaredPhpDocTypeNames(tags: readonly PhpDocTag[]): Set<string> {
     const names = new Set<string>();
 
     for (const { tag, body } of tags) {
-        if (tag !== 'template' && tag !== 'phpstan-type') {
+        if (tag === 'template' || tag === 'phpstan-type') {
+            const match = /^([A-Za-z_][A-Za-z0-9_]*)\b/.exec(body.trim());
+            if (match !== null) {
+                names.add(match[1]);
+            }
             continue;
         }
 
-        const match = /^([A-Za-z_][A-Za-z0-9_]*)\b/.exec(body.trim());
-        if (match !== null) {
-            names.add(match[1]);
+        if (tag === 'phpstan-import-type') {
+            const importedType = phpStanImportTypeParts(body);
+            if (importedType !== null) {
+                names.add(importedType.alias);
+            }
         }
     }
 
@@ -198,6 +204,19 @@ function phpStanTypeExpression(body: string): string {
     return match === null ? '' : leadingPhpDocTypeExpression(match[1]);
 }
 
+function phpStanImportTypeParts(body: string): { alias: string; source: string } | null {
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)\s+from\s+(.+?)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?\s*$/.exec(body.trim());
+
+    if (match === null) {
+        return null;
+    }
+
+    return {
+        alias: match[3] ?? match[1],
+        source: match[2],
+    };
+}
+
 function phpDocTypeExpression(tag: string, body: string): string {
     if (tag === 'template') {
         return templatePhpDocTypeExpression(body);
@@ -205,6 +224,10 @@ function phpDocTypeExpression(tag: string, body: string): string {
 
     if (tag === 'phpstan-type') {
         return phpStanTypeExpression(body);
+    }
+
+    if (tag === 'phpstan-import-type') {
+        return phpStanImportTypeParts(body)?.source ?? '';
     }
 
     if (tag === 'var') {

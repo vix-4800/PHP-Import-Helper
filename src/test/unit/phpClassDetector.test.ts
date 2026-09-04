@@ -468,6 +468,27 @@ final class Example {
         assert.deepStrictEqual(detector.detectImportUsages(text), ['ItemType']);
     });
 
+    test('detects PHPStan imported type sources without treating imported aliases as imports', () => {
+        const text = `<?php
+use Fixture\\TypeSource;
+
+/**
+ * @phpstan-import-type LocalType from TypeSource
+ * @phpstan-import-type OriginalType from TypeSource as RenamedType
+ */
+final class Subject {
+    /**
+     * @param LocalType $value
+     * @return RenamedType
+     */
+    public function process($value) {}
+}
+`;
+
+        assert.deepStrictEqual(detector.detectAll(text), ['TypeSource']);
+        assert.deepStrictEqual(detector.detectImportUsages(text), ['TypeSource']);
+    });
+
     test('detects no-capture catch, DNF types, variadic params, and typed constants', () => {
         const result = detector.detectAll(`<?php
 
